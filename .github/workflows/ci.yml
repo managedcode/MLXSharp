@@ -14,6 +14,20 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Show .NET info
+        run: dotnet --info
+
+      - name: Restore dependencies
+        run: dotnet restore MLXSharp.sln
+
+      - name: Build C# projects (initial validation)
+        run: dotnet build MLXSharp.sln --configuration Release --no-restore
+
       - name: Install CMake
         run: brew install cmake
 
@@ -39,21 +53,7 @@ jobs:
           mkdir -p src/MLXSharp.Native/runtimes/osx-arm64/native
           cp native/build/libmlxsharp.dylib src/MLXSharp.Native/runtimes/osx-arm64/native/
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 9.0.x
-
-      - name: Show .NET info
-        run: dotnet --info
-
-      - name: Restore dependencies
-        run: dotnet restore MLXSharp.sln
-
-      - name: Build C# projects (initial validation)
-        run: dotnet build MLXSharp.sln --configuration Release --no-restore
-
-      - name: Build with native libraries
+      - name: Rebuild with native libraries
         run: dotnet build MLXSharp.sln --configuration Release --no-restore
 
       - name: Copy native library to test output
