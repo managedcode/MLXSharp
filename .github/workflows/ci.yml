@@ -50,7 +50,10 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore MLXSharp.sln
 
-      - name: Build
+      - name: Build C# projects (initial validation)
+        run: dotnet build MLXSharp.sln --configuration Release --no-restore
+
+      - name: Build with native libraries
         run: dotnet build MLXSharp.sln --configuration Release --no-restore
 
       - name: Copy native library to test output
