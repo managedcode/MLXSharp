@@ -67,12 +67,24 @@ history.AddUserMessage("Summarise MLX in one sentence");
 var response = await chat.GetChatMessageContentsAsync(history, new PromptExecutionSettings(), kernel, CancellationToken.None);
 ```
 
-## Native Runtime Packaging
+## NuGet Package
 
-- `src/MLXSharp.Native` mimics NuGet runtime assets with `runtimes/<rid>/native/libmlxsharp.*` folders.
-  The Linux x64 directory contains a stub library compiled from `native/src/mlxsharp.cpp` so tests can load it.
-- Drop the real macOS build (`libmlxsharp.dylib`) into `runtimes/osx-arm64/native/` before packing a release build.
-- At runtime `MlxNativeLibrary` probes the explicit `MlxClientOptions.LibraryPath`, the `MLXSHARP_LIBRARY` environment variable, and packaged runtime folders before falling back to system search paths.
+**MLXSharp** NuGet package містить:
+- Managed DLL з `Microsoft.Extensions.AI` інтеграціями
+- Native бібліотеки в `runtimes/{rid}/native/`:
+  - `runtimes/linux-x64/native/libmlxsharp.so` - stub для CI/testing
+  - `runtimes/osx-arm64/native/libmlxsharp.dylib` - білдиться в CI на macOS
+
+GitHub Actions автоматично:
+1. Компілює native wrapper з MLX submodule
+2. Копіює `libmlxsharp.dylib` в `src/MLXSharp.Native/runtimes/osx-arm64/native/`
+3. Пакує managed + native разом в один NuGet пакет
+
+Під час виконання `MlxNativeLibrary` автоматично знаходить правильну бібліотеку:
+- Перевіряє `MlxClientOptions.LibraryPath`
+- Перевіряє `MLXSHARP_LIBRARY` environment variable
+- Шукає в `runtimes/{rid}/native/` (NuGet розпаковує автоматично)
+- Fallback на system library search paths
 
 To build the native wrapper locally (mirroring the LLamaSharp workflow):
 

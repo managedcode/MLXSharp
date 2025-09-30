@@ -13,6 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="runtimes/**" Pack="true" PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="runtimes/**/*.*"
+          Pack="true"
+          PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="runtimes/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>

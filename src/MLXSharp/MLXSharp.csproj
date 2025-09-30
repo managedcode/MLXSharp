@@ -16,6 +16,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MLXSharp.Native\MLXSharp.Native.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <ProjectReference Include="..\MLXSharp.Native\MLXSharp.Native.csproj"
+                      ReferenceOutputAssembly="false"
+                      PrivateAssets="all"
+                      IncludeAssets="none" />
+  </ItemGroup>
+
+  <!-- Include native binaries from MLXSharp.Native project into this package -->
+  <ItemGroup>
+    <None Include="..\MLXSharp.Native\runtimes\**\*.*"
+          Pack="true"
+          PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="runtimes\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
 </Project>
