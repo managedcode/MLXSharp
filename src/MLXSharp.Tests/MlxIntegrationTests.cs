@@ -17,7 +17,6 @@ namespace MLXSharp.Tests;
 
 public class MlxIntegrationTests(ITestOutputHelper output)
 {
-    private readonly ITestOutputHelper _output = output;
     [Fact]
     public async Task ChatClientGeneratesResponse()
     {
@@ -45,7 +44,7 @@ public class MlxIntegrationTests(ITestOutputHelper output)
 
         Assert.NotEmpty(response.Messages);
         Assert.NotEmpty(response.Messages[0].Text);
-        _output.WriteLine($"Response: {response.Messages[0].Text}");
+        output.WriteLine($"Response: {response.Messages[0].Text}");
     }
 
     [Fact]
@@ -75,7 +74,7 @@ public class MlxIntegrationTests(ITestOutputHelper output)
             CancellationToken.None);
 
         Assert.NotEmpty(response1.Messages);
-        _output.WriteLine($"Response 1: {response1.Messages[0].Text}");
+        output.WriteLine($"Response 1: {response1.Messages[0].Text}");
 
         // Second request
         var response2 = await chatClient.GetResponseAsync(
@@ -84,7 +83,7 @@ public class MlxIntegrationTests(ITestOutputHelper output)
             CancellationToken.None);
 
         Assert.NotEmpty(response2.Messages);
-        _output.WriteLine($"Response 2: {response2.Messages[0].Text}");
+        output.WriteLine($"Response 2: {response2.Messages[0].Text}");
     }
 
     [Fact]
@@ -111,13 +110,14 @@ public class MlxIntegrationTests(ITestOutputHelper output)
 
         var result = await chat.GetChatMessageContentsAsync(
             history,
-            new PromptExecutionSettings { MaxTokens = 50 },
+            new MlxPromptExecutionSettings { MaxTokens = 50 },
             kernel,
             CancellationToken.None);
 
         Assert.NotEmpty(result);
-        Assert.NotEmpty(result[0].Content);
-        _output.WriteLine($"SK Response: {result[0].Content}");
+        Assert.NotNull(result[0].Content);
+        Assert.False(string.IsNullOrEmpty(result[0].Content));
+        output.WriteLine($"SK Response: {result[0].Content}");
     }
 
     [Fact]
@@ -126,8 +126,8 @@ public class MlxIntegrationTests(ITestOutputHelper output)
         var modelPath = GetRequiredModelPath();
         var nativeLibPath = GetRequiredNativeLibraryPath();
 
-        _output.WriteLine($"Model: {modelPath}");
-        _output.WriteLine($"Library: {nativeLibPath}");
+        output.WriteLine($"Model: {modelPath}");
+        output.WriteLine($"Library: {nativeLibPath}");
 
         var services = new ServiceCollection();
         services.AddMlx(builder =>
@@ -158,7 +158,7 @@ public class MlxIntegrationTests(ITestOutputHelper output)
         Assert.NotEmpty(response.Messages);
         Assert.NotEmpty(response.Messages[0].Text);
 
-        _output.WriteLine($"Response ({stopwatch.ElapsedMilliseconds}ms): {response.Messages[0].Text}");
+        output.WriteLine($"Response ({stopwatch.ElapsedMilliseconds}ms): {response.Messages[0].Text}");
     }
 
     private static string GetRequiredModelPath()
