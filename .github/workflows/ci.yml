@@ -35,11 +35,15 @@ jobs:
           mkdir -p artifacts/packages
           mkdir -p artifacts/native
 
-      - name: Build native wrapper
+      - name: Install dependencies
+        run: brew install cmake
+
+      - name: Build native stub library
         run: |
           cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build native/build --target mlxsharp
+          cmake --build native/build --target mlxsharp --config Release
           cp native/build/libmlxsharp.dylib artifacts/native/
+          cp native/build/libmlxsharp.dylib src/MLXSharp.Native/runtimes/osx-arm64/native/
 
       - name: Run tests
         run: dotnet test MLXSharp.sln --configuration Release --no-build --logger "trx;LogFileName=TestResults.trx" --results-directory artifacts/test-results

@@ -91,6 +91,44 @@ public class MlxIntegrationTests
         Assert.Contains("mlx", result[0].Content, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact(Skip = "Requires real MLX model and native library")]
+    public async Task RealModelGeneratesText()
+    {
+        var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
+        if (string.IsNullOrEmpty(modelPath) || !Directory.Exists(modelPath))
+        {
+            // Skip if model not available
+            return;
+        }
+
+        var services = new ServiceCollection();
+        services.AddMlx(builder =>
+        {
+            builder.Configure(options =>
+            {
+                options.ChatModelId = modelPath;
+                options.LibraryPath = ResolveNativeLibraryPath();
+            });
+            builder.UseNativeBackend();
+        });
+
+        await using var provider = services.BuildServiceProvider();
+        var chatClient = provider.GetRequiredService<IChatClient>();
+
+        var response = await chatClient.GetResponseAsync(
+            new[] { new ChatMessage(ChatRole.User, "Say hello in Ukrainian") },
+            new ChatOptions { MaxOutputTokens = 50 },
+            CancellationToken.None);
+
+        Assert.NotEmpty(response.Messages);
+        Assert.NotEmpty(response.Messages[0].Text);
+        // Should contain Ukrainian greeting
+        Assert.True(response.Messages[0].Text.Contains("Привіт", StringComparison.OrdinalIgnoreCase) ||
+                   response.Messages[0].Text.Contains("Вітаю", StringComparison.OrdinalIgnoreCase) ||
+                   response.Messages[0].Text.Contains("Здрастуйте", StringComparison.OrdinalIgnoreCase),
+                   $"Expected Ukrainian greeting but got: {response.Messages[0].Text}");
+    }
+
     private static string? ResolveNativeLibraryPath()
     {
         var baseDirectory = AppContext.BaseDirectory;
