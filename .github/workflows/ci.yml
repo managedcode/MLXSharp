@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          include-prerelease: true
+
+      - name: Show .NET info
+        run: dotnet --info
+
+      - name: Restore dependencies
+        run: dotnet restore MLXSharp.sln
+
+      - name: Build
+        run: dotnet build MLXSharp.sln --configuration Release --no-restore
+
+      - name: Prepare artifact folders
+        run: |
+          mkdir -p artifacts/test-results
+          mkdir -p artifacts/packages
+          mkdir -p artifacts/native
+
+      - name: Build native wrapper
+        run: |
+          cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --target mlxsharp
+          cp native/build/libmlxsharp.dylib artifacts/native/
+
+      - name: Run tests
+        run: dotnet test MLXSharp.sln --configuration Release --no-build --logger "trx;LogFileName=TestResults.trx" --results-directory artifacts/test-results
+
+      - name: Pack library
+        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --no-build --output artifacts/packages
+
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-libs
+          path: artifacts/native
+
+      - name: Upload packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: artifacts/test-results

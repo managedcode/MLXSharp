@@ -416,3 +416,23 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# MLXSharp native and tooling artifacts
+native/build/
+native/out/
+cmake-build*/
+CMakeCache.txt
+CMakeFiles/
+Testing/
+_deps/
+compile_commands.json
+Makefile
+build.ninja
+.ninja_deps
+.ninja_log
+
+# Miscellaneous host-specific clutter
+.DS_Store
+Thumbs.db
+*.swp
+*.swo

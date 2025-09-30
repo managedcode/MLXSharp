@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <PackageId>MLXSharp.Native</PackageId>
+    <Title>MLXSharp.Native</Title>
+    <Description>Prebuilt native binaries that back MLXSharp P/Invoke bindings.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="runtimes/**" Pack="true" PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
