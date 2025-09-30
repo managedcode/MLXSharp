@@ -9,17 +9,19 @@ The design mirrors the packaging approach from projects such as [LLamaSharp](htt
 - Builder-based backend configuration with a deterministic managed implementation for tests and a P/Invoke powered native backend.
 - Native library resolver that probes application directories, `MLXSHARP_LIBRARY`, or packaged runtimes and loads `libmlxsharp` on demand.
 - `MLXSharp.Native` packaging project that ships stub binaries for CI (Linux x64 today) and a placeholder `osx-arm64` folder for the production MLX wrapper.
-- Dependency injection extensions (`AddMlx`) and Semantic Kernel integration (`AddMlxChatCompletion`).
+- Dependency injection extensions (`AddMlx`) in **MLXSharp** package.
+- Semantic Kernel integration (`AddMlxChatCompletion`) in separate **MLXSharp.SemanticKernel** package.
 - Integration test suite that exercises chat, embedding, image, and Semantic Kernel flows against both managed and native backends.
 
 ## Repository Layout
 
 ```
-├── extern/mlx              # Git submodule with the official MLX sources
-├── native/                 # Native wrapper scaffold (CMake project)
-├── src/MLXSharp/           # Managed library with Microsoft.Extensions.AI adapters
-├── src/MLXSharp.Native/    # NuGet-ready container for native binaries
-└── src/MLXSharp.Tests/     # Integration tests covering DI and Semantic Kernel
+├── extern/mlx                      # Git submodule with the official MLX sources
+├── native/                         # Native wrapper scaffold (CMake project)
+├── src/MLXSharp/                   # Managed library with Microsoft.Extensions.AI adapters
+├── src/MLXSharp.SemanticKernel/    # Semantic Kernel integration (separate package)
+├── src/MLXSharp.Native/            # NuGet-ready container for native binaries
+└── src/MLXSharp.Tests/             # Integration tests covering DI and Semantic Kernel
 ```
 
 ## Prerequisites
@@ -67,24 +69,44 @@ history.AddUserMessage("Summarise MLX in one sentence");
 var response = await chat.GetChatMessageContentsAsync(history, new PromptExecutionSettings(), kernel, CancellationToken.None);
 ```
 
-## NuGet Package
+## NuGet Packages
 
-**MLXSharp** NuGet package містить:
-- Managed DLL з `Microsoft.Extensions.AI` інтеграціями
-- Native бібліотеки в `runtimes/{rid}/native/`:
-  - `runtimes/linux-x64/native/libmlxsharp.so` - stub для CI/testing
-  - `runtimes/osx-arm64/native/libmlxsharp.dylib` - білдиться в CI на macOS
+### MLXSharp [![NuGet](https://img.shields.io/nuget/v/MLXSharp.svg)](https://www.nuget.org/packages/MLXSharp)
 
-GitHub Actions автоматично:
-1. Компілює native wrapper з MLX submodule
-2. Копіює `libmlxsharp.dylib` в `src/MLXSharp.Native/runtimes/osx-arm64/native/`
-3. Пакує managed + native разом в один NuGet пакет
+Core package with `Microsoft.Extensions.AI` integration:
 
-Під час виконання `MlxNativeLibrary` автоматично знаходить правильну бібліотеку:
-- Перевіряє `MlxClientOptions.LibraryPath`
-- Перевіряє `MLXSHARP_LIBRARY` environment variable
-- Шукає в `runtimes/{rid}/native/` (NuGet розпаковує автоматично)
-- Fallback на system library search paths
+```bash
+dotnet add package MLXSharp
+```
+
+This package contains:
+- Managed DLL with `Microsoft.Extensions.AI` implementations
+- Native libraries in `runtimes/{rid}/native/`:
+  - `runtimes/linux-x64/native/libmlxsharp.so` - stub for CI/testing
+  - `runtimes/osx-arm64/native/libmlxsharp.dylib` - built in CI on macOS
+
+### MLXSharp.SemanticKernel [![NuGet](https://img.shields.io/nuget/v/MLXSharp.SemanticKernel.svg)](https://www.nuget.org/packages/MLXSharp.SemanticKernel)
+
+Semantic Kernel integration:
+
+```bash
+dotnet add package MLXSharp.SemanticKernel
+```
+
+This package depends on MLXSharp and adds Semantic Kernel chat completion service.
+
+### How It Works
+
+GitHub Actions automatically:
+1. Compiles native wrapper with MLX submodule
+2. Copies `libmlxsharp.dylib` to `src/MLXSharp.Native/runtimes/osx-arm64/native/`
+3. Packs managed + native together in NuGet package
+
+At runtime `MlxNativeLibrary` automatically finds the right library:
+- Checks `MlxClientOptions.LibraryPath`
+- Checks `MLXSHARP_LIBRARY` environment variable
+- Searches in `runtimes/{rid}/native/` (NuGet unpacks automatically)
+- Fallback to system library search paths
 
 To build the native wrapper locally (mirroring the LLamaSharp workflow):
 

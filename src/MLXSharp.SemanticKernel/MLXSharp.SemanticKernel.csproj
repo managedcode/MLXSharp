@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="Microsoft.SemanticKernel" Version="1.65.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\MLXSharp\MLXSharp.csproj" />
+  </ItemGroup>
+</Project>

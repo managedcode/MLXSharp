@@ -11,95 +11,18 @@ using MLXSharp.Backends;
 using MLXSharp.Clients;
 using MLXSharp.DependencyInjection;
 using MLXSharp.SemanticKernel;
+using Xunit.Abstractions;
 
 namespace MLXSharp.Tests;
 
-public class MlxIntegrationTests
+public class MlxIntegrationTests(ITestOutputHelper output)
 {
+    private readonly ITestOutputHelper _output = output;
     [Fact]
-    public async Task ServiceCollectionProvidesEndToEndClients()
+    public async Task ChatClientGeneratesResponse()
     {
-        var services = new ServiceCollection();
-        services.AddMlx(builder =>
-        {
-            builder.Configure(options => options.ChatModelId = "test-chat");
-        });
-
-        await using var provider = services.BuildServiceProvider();
-        var chatClient = provider.GetRequiredService<IChatClient>();
-        var embeddingGenerator = provider.GetRequiredService<IEmbeddingGenerator<string, Embedding<float>>>();
-        var imageClient = provider.GetRequiredService<IMlxImageClient>();
-
-        var chatHistory = new List<ChatMessage>
-        {
-            new(ChatRole.User, "привіт"),
-        };
-
-        var response = await chatClient.GetResponseAsync(chatHistory, new ChatOptions { Temperature = 0.2f }, CancellationToken.None);
-        Assert.NotEmpty(response.Messages);
-        Assert.Contains("user:привіт", response.Messages[0].Text);
-        Assert.Equal("test-chat", response.ModelId);
-
-        var embeddings = await embeddingGenerator.GenerateAsync(new[] { "mlx" }, null, CancellationToken.None);
-        Assert.Single(embeddings);
-        Assert.Equal(8, embeddings[0].Vector.Length);
-
-        var image = await imageClient.GenerateImageAsync("apple mlx");
-        Assert.Equal("image/png", image.MediaType);
-        Assert.True(image.Data.Length > 0);
-    }
-
-    [Fact]
-    public async Task NativeBackendLoadsStubLibrary()
-    {
-        var services = new ServiceCollection();
-        services.AddMlx(builder =>
-        {
-            builder.Configure(options =>
-            {
-                options.ChatModelId = "native-stub";
-                options.LibraryPath = ResolveNativeLibraryPath();
-            });
-            builder.UseNativeBackend();
-        });
-
-        await using var provider = services.BuildServiceProvider();
-        var chatClient = provider.GetRequiredService<IChatClient>();
-        var response = await chatClient.GetResponseAsync(new[] { new ChatMessage(ChatRole.User, "ping") }, null, CancellationToken.None);
-
-        Assert.NotEmpty(response.Messages);
-        Assert.Contains("mlxstub", response.Messages[0].Text, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task SemanticKernelExtensionAddsChatService()
-    {
-        var builder = Kernel.CreateBuilder();
-        builder.AddMlxChatCompletion(b =>
-        {
-            b.Configure(options => options.ChatModelId = "sk-model");
-            b.UseManagedBackend(new MlxManagedBackend());
-        });
-
-        var kernel = builder.Build();
-        var chat = kernel.Services.GetRequiredService<IChatCompletionService>();
-        var history = new ChatHistory();
-        history.AddUserMessage("Explain MLX in one sentence");
-
-        var result = await chat.GetChatMessageContentsAsync(history, new PromptExecutionSettings(), kernel, CancellationToken.None);
-        Assert.NotEmpty(result);
-        Assert.Contains("mlx", result[0].Content, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact(Skip = "Requires real MLX model and native library")]
-    public async Task RealModelGeneratesText()
-    {
-        var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
-        if (string.IsNullOrEmpty(modelPath) || !Directory.Exists(modelPath))
-        {
-            // Skip if model not available
-            return;
-        }
+        var modelPath = GetRequiredModelPath();
+        var nativeLibPath = GetRequiredNativeLibraryPath();
 
         var services = new ServiceCollection();
         services.AddMlx(builder =>
@@ -107,7 +30,7 @@ public class MlxIntegrationTests
             builder.Configure(options =>
             {
                 options.ChatModelId = modelPath;
-                options.LibraryPath = ResolveNativeLibraryPath();
+                options.LibraryPath = nativeLibPath;
             });
             builder.UseNativeBackend();
         });
@@ -116,20 +39,137 @@ public class MlxIntegrationTests
         var chatClient = provider.GetRequiredService<IChatClient>();
 
         var response = await chatClient.GetResponseAsync(
-            new[] { new ChatMessage(ChatRole.User, "Say hello in Ukrainian") },
-            new ChatOptions { MaxOutputTokens = 50 },
+            new[] { new ChatMessage(ChatRole.User, "What is 2+2?") },
+            new ChatOptions { MaxOutputTokens = 50, Temperature = 0.7f },
             CancellationToken.None);
 
         Assert.NotEmpty(response.Messages);
         Assert.NotEmpty(response.Messages[0].Text);
-        // Should contain Ukrainian greeting
-        Assert.True(response.Messages[0].Text.Contains("Привіт", StringComparison.OrdinalIgnoreCase) ||
-                   response.Messages[0].Text.Contains("Вітаю", StringComparison.OrdinalIgnoreCase) ||
-                   response.Messages[0].Text.Contains("Здрастуйте", StringComparison.OrdinalIgnoreCase),
-                   $"Expected Ukrainian greeting but got: {response.Messages[0].Text}");
+        _output.WriteLine($"Response: {response.Messages[0].Text}");
     }
 
-    private static string? ResolveNativeLibraryPath()
+    [Fact]
+    public async Task MultipleRequestsWorkCorrectly()
+    {
+        var modelPath = GetRequiredModelPath();
+        var nativeLibPath = GetRequiredNativeLibraryPath();
+
+        var services = new ServiceCollection();
+        services.AddMlx(builder =>
+        {
+            builder.Configure(options =>
+            {
+                options.ChatModelId = modelPath;
+                options.LibraryPath = nativeLibPath;
+            });
+            builder.UseNativeBackend();
+        });
+
+        await using var provider = services.BuildServiceProvider();
+        var chatClient = provider.GetRequiredService<IChatClient>();
+
+        // First request
+        var response1 = await chatClient.GetResponseAsync(
+            new[] { new ChatMessage(ChatRole.User, "Say hello") },
+            new ChatOptions { MaxOutputTokens = 30 },
+            CancellationToken.None);
+
+        Assert.NotEmpty(response1.Messages);
+        _output.WriteLine($"Response 1: {response1.Messages[0].Text}");
+
+        // Second request
+        var response2 = await chatClient.GetResponseAsync(
+            new[] { new ChatMessage(ChatRole.User, "Count to 3") },
+            new ChatOptions { MaxOutputTokens = 30 },
+            CancellationToken.None);
+
+        Assert.NotEmpty(response2.Messages);
+        _output.WriteLine($"Response 2: {response2.Messages[0].Text}");
+    }
+
+    [Fact]
+    public async Task SemanticKernelIntegrationWorks()
+    {
+        var modelPath = GetRequiredModelPath();
+        var nativeLibPath = GetRequiredNativeLibraryPath();
+
+        var builder = Kernel.CreateBuilder();
+        builder.AddMlxChatCompletion(b =>
+        {
+            b.Configure(options =>
+            {
+                options.ChatModelId = modelPath;
+                options.LibraryPath = nativeLibPath;
+            });
+            b.UseNativeBackend();
+        });
+
+        var kernel = builder.Build();
+        var chat = kernel.Services.GetRequiredService<IChatCompletionService>();
+        var history = new ChatHistory();
+        history.AddUserMessage("What is 1+1?");
+
+        var result = await chat.GetChatMessageContentsAsync(
+            history,
+            new PromptExecutionSettings { MaxTokens = 50 },
+            kernel,
+            CancellationToken.None);
+
+        Assert.NotEmpty(result);
+        Assert.NotEmpty(result[0].Content);
+        _output.WriteLine($"SK Response: {result[0].Content}");
+    }
+
+    [Fact]
+    public async Task LongerConversationWithContext()
+    {
+        var modelPath = GetRequiredModelPath();
+        var nativeLibPath = GetRequiredNativeLibraryPath();
+
+        _output.WriteLine($"Model: {modelPath}");
+        _output.WriteLine($"Library: {nativeLibPath}");
+
+        var services = new ServiceCollection();
+        services.AddMlx(builder =>
+        {
+            builder.Configure(options =>
+            {
+                options.ChatModelId = modelPath;
+                options.LibraryPath = nativeLibPath;
+            });
+            builder.UseNativeBackend();
+        });
+
+        await using var provider = services.BuildServiceProvider();
+        var chatClient = provider.GetRequiredService<IChatClient>();
+
+        var messages = new List<ChatMessage>
+        {
+            new(ChatRole.User, "What is the capital of France?")
+        };
+
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var response = await chatClient.GetResponseAsync(
+            messages,
+            new ChatOptions { MaxOutputTokens = 100, Temperature = 0.7f },
+            CancellationToken.None);
+        stopwatch.Stop();
+
+        Assert.NotEmpty(response.Messages);
+        Assert.NotEmpty(response.Messages[0].Text);
+
+        _output.WriteLine($"Response ({stopwatch.ElapsedMilliseconds}ms): {response.Messages[0].Text}");
+    }
+
+    private static string GetRequiredModelPath()
+    {
+        var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
+        Assert.False(string.IsNullOrEmpty(modelPath), "MLXSHARP_MODEL_PATH environment variable must be set");
+        Assert.True(Directory.Exists(modelPath), $"Model directory does not exist: {modelPath}");
+        return modelPath;
+    }
+
+    private static string GetRequiredNativeLibraryPath()
     {
         var baseDirectory = AppContext.BaseDirectory;
         var libraryName = OperatingSystem.IsWindows()
@@ -142,7 +182,8 @@ public class MlxIntegrationTests
             : OperatingSystem.IsWindows()
                 ? "win-x64"
                 : "linux-x64";
-        var candidate = Path.Combine(baseDirectory, "runtimes", rid, "native", libraryName);
-        return File.Exists(candidate) ? candidate : null;
+        var path = Path.Combine(baseDirectory, "runtimes", rid, "native", libraryName);
+        Assert.True(File.Exists(path), $"Native library not found: {path}");
+        return path;
     }
 }

@@ -17,6 +17,21 @@ jobs:
       - name: Install CMake
         run: brew install cmake
 
+      - name: Setup Python for HuggingFace
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install HuggingFace CLI
+        run: pip install huggingface_hub
+
+      - name: Download test model from HuggingFace
+        run: |
+          mkdir -p models
+          huggingface-cli download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit
+          echo "Model files:"
+          ls -la models/Qwen1.5-0.5B-Chat-4bit/
+
       - name: Build native stub library
         run: |
           cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
@@ -47,6 +62,8 @@ jobs:
 
       - name: Run tests
         run: dotnet test MLXSharp.sln --configuration Release --no-build --logger "trx;LogFileName=TestResults.trx" --results-directory artifacts/test-results
+        env:
+          MLXSHARP_MODEL_PATH: ${{ github.workspace }}/models/Qwen1.5-0.5B-Chat-4bit
 
       - name: Prepare artifact folders
         run: |
@@ -55,8 +72,11 @@ jobs:
           mkdir -p artifacts/native
           cp src/MLXSharp.Native/runtimes/osx-arm64/native/libmlxsharp.dylib artifacts/native/
 
-      - name: Pack library
+      - name: Pack MLXSharp library
         run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --no-build --output artifacts/packages
+
+      - name: Pack MLXSharp.SemanticKernel library
+        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --no-build --output artifacts/packages
 
       - name: Verify package contains native libraries
         run: |
@@ -88,3 +108,89 @@ jobs:
         with:
           name: test-results
           path: artifacts/test-results
+
+  release:
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: build-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract version from Directory.Build.props
+        id: version
+        run: |
+          VERSION=$(grep -oP '<Version>\K[^<]+' Directory.Build.props)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      # - name: Check if tag exists
+      #   id: check_tag
+      #   run: |
+      #     if git ls-remote --tags origin | grep -q "refs/tags/v${{ steps.version.outputs.version }}"; then
+      #       echo "exists=true" >> $GITHUB_OUTPUT
+      #       echo "Tag v${{ steps.version.outputs.version }} already exists"
+      #     else
+      #       echo "exists=false" >> $GITHUB_OUTPUT
+      #       echo "Tag v${{ steps.version.outputs.version }} does not exist"
+      #     fi
+
+      # - name: Download package artifacts
+      #   if: steps.check_tag.outputs.exists == 'false'
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: packages
+      #     path: artifacts/packages
+
+      # - name: Publish to NuGet
+      #   if: steps.check_tag.outputs.exists == 'false'
+      #   run: |
+      #     for package in artifacts/packages/*.nupkg; do
+      #       echo "Publishing $package..."
+      #       dotnet nuget push "$package" \
+      #         --api-key ${{ secrets.NUGET_API_KEY }} \
+      #         --source https://api.nuget.org/v3/index.json \
+      #         --skip-duplicate || true
+      #     done
+
+      # - name: Create Git tag
+      #   if: steps.check_tag.outputs.exists == 'false'
+      #   run: |
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
+      #     git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+      #     git push origin "v${{ steps.version.outputs.version }}"
+
+      # - name: Generate release notes
+      #   if: steps.check_tag.outputs.exists == 'false'
+      #   id: release_notes
+      #   run: |
+      #     PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+      #     if [ -z "$PREVIOUS_TAG" ]; then
+      #       COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
+      #     else
+      #       COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
+      #     fi
+
+      #     echo "## What's Changed" > release_notes.md
+      #     echo "" >> release_notes.md
+      #     echo "$COMMITS" >> release_notes.md
+      #     echo "" >> release_notes.md
+      #     echo "## NuGet Packages" >> release_notes.md
+      #     echo "- [MLXSharp v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp/${{ steps.version.outputs.version }})" >> release_notes.md
+      #     echo "- [MLXSharp.SemanticKernel v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp.SemanticKernel/${{ steps.version.outputs.version }})" >> release_notes.md
+
+      #     cat release_notes.md
+
+      # - name: Create GitHub Release
+      #   if: steps.check_tag.outputs.exists == 'false'
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     tag_name: v${{ steps.version.outputs.version }}
+      #     name: Release v${{ steps.version.outputs.version }}
+      #     body_path: release_notes.md
+      #     files: artifacts/packages/*
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
