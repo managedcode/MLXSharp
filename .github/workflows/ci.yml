@@ -76,10 +76,10 @@ jobs:
           cp src/MLXSharp.Native/runtimes/osx-arm64/native/libmlxsharp.dylib artifacts/native/
 
       - name: Pack MLXSharp library
-        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --no-build --output artifacts/packages
+        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --output artifacts/packages
 
       - name: Pack MLXSharp.SemanticKernel library
-        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --no-build --output artifacts/packages
+        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --output artifacts/packages
 
       - name: Verify package contains native libraries
         run: |
