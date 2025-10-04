@@ -31,6 +31,18 @@ jobs:
       - name: Install CMake
         run: brew install cmake
 
+      - name: Build native stub library
+        run: |
+          cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/build --target mlxsharp --config Release
+          mkdir -p src/MLXSharp.Native/runtimes/osx-arm64/native
+          cp native/build/libmlxsharp.dylib src/MLXSharp.Native/runtimes/osx-arm64/native/
+          echo "Native library built:"
+          ls -la src/MLXSharp.Native/runtimes/osx-arm64/native/
+
+      - name: Rebuild solution with native libraries
+        run: dotnet build MLXSharp.sln --configuration Release --no-restore
+
       - name: Setup Python for HuggingFace
         uses: actions/setup-python@v5
         with:
@@ -45,16 +57,6 @@ jobs:
           huggingface-cli download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit
           echo "Model files:"
           ls -la models/Qwen1.5-0.5B-Chat-4bit/
-
-      - name: Build native stub library
-        run: |
-          cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
-          cmake --build native/build --target mlxsharp --config Release
-          mkdir -p src/MLXSharp.Native/runtimes/osx-arm64/native
-          cp native/build/libmlxsharp.dylib src/MLXSharp.Native/runtimes/osx-arm64/native/
-
-      - name: Rebuild with native libraries
-        run: dotnet build MLXSharp.sln --configuration Release --no-restore
 
       - name: Copy native library to test output
         run: |
@@ -76,10 +78,12 @@ jobs:
           cp src/MLXSharp.Native/runtimes/osx-arm64/native/libmlxsharp.dylib artifacts/native/
 
       - name: Pack MLXSharp library
-        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --output artifacts/packages
+        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --output artifacts/packages \
+          -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/native/build/libmlxsharp.dylib
 
       - name: Pack MLXSharp.SemanticKernel library
-        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --output artifacts/packages
+        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --output artifacts/packages \
+          -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/native/build/libmlxsharp.dylib
 
       - name: Verify package contains native libraries
         run: |

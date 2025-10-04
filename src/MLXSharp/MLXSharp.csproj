@@ -14,6 +14,29 @@
                       IncludeAssets="none" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == ''">$(MSBuildProjectDirectory)..\..\native\build\libmlxsharp.dylib</MLXSharpMacNativeBinary>
+    <MLXSharpMacNativeDestination>..\MLXSharp.Native\runtimes\osx-arm64\native\libmlxsharp.dylib</MLXSharpMacNativeDestination>
+    <MLXSharpSkipMacNativeValidation Condition="'$(MLXSharpSkipMacNativeValidation)' == ''">false</MLXSharpSkipMacNativeValidation>
+  </PropertyGroup>
+
+  <Target Name="EnsureMacNativeBinary"
+          BeforeTargets="Pack"
+          Condition="'$(MSBuildProjectFullPath)' == '$(MSBuildThisFileFullPath)'">
+    <ItemGroup>
+      <_MacNativeSource Include="$(MLXSharpMacNativeBinary)"
+                        Condition="Exists('$(MLXSharpMacNativeBinary)')" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(_MacNativeSource)"
+          DestinationFiles="$(MLXSharpMacNativeDestination)"
+          SkipUnchangedFiles="true"
+          Condition="'@(_MacNativeSource)' != ''" />
+
+    <Error Condition="'$(MLXSharpSkipMacNativeValidation)' != 'true' and !Exists('$(MLXSharpMacNativeDestination)')"
+           Text="libmlxsharp.dylib is missing. Build the native library or supply MLXSharpMacNativeBinary before packing." />
+  </Target>
+
   <!-- Include native binaries from MLXSharp.Native project into this package -->
   <ItemGroup>
     <None Include="..\MLXSharp.Native\runtimes\**\*.*"
