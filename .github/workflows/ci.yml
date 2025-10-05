@@ -81,25 +81,21 @@ jobs:
         run: |
           set -euo pipefail
           : "${GITHUB_WORKSPACE:=${PWD}}"
-          MAC_NATIVE_BINARY="${GITHUB_WORKSPACE}/native/build/libmlxsharp.dylib"
-          echo "Packing MLXSharp with native binary: ${MAC_NATIVE_BINARY}"
-          dotnet pack \
-            src/MLXSharp/MLXSharp.csproj \
+          export MLXSharpMacNativeBinary="${GITHUB_WORKSPACE}/native/build/libmlxsharp.dylib"
+          echo "Packing MLXSharp with native binary: ${MLXSharpMacNativeBinary}"
+          dotnet pack src/MLXSharp/MLXSharp.csproj \
             --configuration Release \
-            --output artifacts/packages \
-            "/p:MLXSharpMacNativeBinary=${MAC_NATIVE_BINARY}"
+            --output artifacts/packages
 
       - name: Pack MLXSharp.SemanticKernel library
         run: |
           set -euo pipefail
           : "${GITHUB_WORKSPACE:=${PWD}}"
-          MAC_NATIVE_BINARY="${GITHUB_WORKSPACE}/native/build/libmlxsharp.dylib"
-          echo "Packing MLXSharp.SemanticKernel with native binary: ${MAC_NATIVE_BINARY}"
-          dotnet pack \
-            src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj \
+          export MLXSharpMacNativeBinary="${GITHUB_WORKSPACE}/native/build/libmlxsharp.dylib"
+          echo "Packing MLXSharp.SemanticKernel with native binary: ${MLXSharpMacNativeBinary}"
+          dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj \
             --configuration Release \
-            --output artifacts/packages \
-            "/p:MLXSharpMacNativeBinary=${MAC_NATIVE_BINARY}"
+            --output artifacts/packages
 
       - name: Verify package contains native libraries
         run: |
