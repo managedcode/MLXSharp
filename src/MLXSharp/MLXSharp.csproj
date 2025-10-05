@@ -7,17 +7,9 @@
     <PackageReference Include="Microsoft.Extensions.AI" Version="9.9.1" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\MLXSharp.Native\MLXSharp.Native.csproj"
-                      ReferenceOutputAssembly="false"
-                      PrivateAssets="all"
-                      IncludeAssets="none" />
-  </ItemGroup>
-
   <PropertyGroup>
-    <MLXProjectRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</MLXProjectRoot>
-    <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MLXProjectRoot)','native','build','libmlxsharp.dylib'))</MLXSharpMacNativeBinary>
-    <MLXSharpMacNativeDestination>$([System.IO.Path]::Combine('$(MLXProjectRoot)','src','MLXSharp.Native','runtimes','osx-arm64','native','libmlxsharp.dylib'))</MLXSharpMacNativeDestination>
+    <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','libmlxsharp.dylib'))</MLXSharpMacNativeBinary>
+    <MLXSharpMacNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','osx-arm64','native','libmlxsharp.dylib'))</MLXSharpMacNativeDestination>
     <MLXSharpSkipMacNativeValidation Condition="'$(MLXSharpSkipMacNativeValidation)' == ''">false</MLXSharpSkipMacNativeValidation>
   </PropertyGroup>
 
@@ -38,9 +30,9 @@
            Text="libmlxsharp.dylib is missing. Build the native library or supply MLXSharpMacNativeBinary before packing." />
   </Target>
 
-  <!-- Include native binaries from MLXSharp.Native project into this package -->
+  <!-- Include native binaries embedded in this project -->
   <ItemGroup>
-    <None Include="..\MLXSharp.Native\runtimes\**\*.*"
+    <None Include="runtimes\**\*.*"
           Pack="true"
           PackagePath="runtimes/%(RecursiveDir)%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
