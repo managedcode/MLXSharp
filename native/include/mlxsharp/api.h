@@ -14,6 +14,10 @@ struct mlxsharp_array;
 typedef struct mlxsharp_context mlxsharp_context_t;
 typedef struct mlxsharp_array mlxsharp_array_t;
 
+// Session handles consumed by the managed high-level bindings.
+struct mlxsharp_session;
+typedef struct mlxsharp_session mlxsharp_session_t;
+
 // Status codes returned by native APIs.
 typedef enum mlxsharp_status {
     MLXSHARP_STATUS_SUCCESS = 0,
@@ -126,7 +130,47 @@ int mlxsharp_array_divide(
     const mlxsharp_array_t* right,
     mlxsharp_array_t** out_array);
 
+// Session-based high-level helpers ----------------------------------------
+
+typedef struct mlx_usage {
+    int input_tokens;
+    int output_tokens;
+} mlx_usage;
+
+int mlxsharp_create_session(
+    const char* chat_model_id,
+    const char* embedding_model_id,
+    const char* image_model_id,
+    void** session);
+
+int mlxsharp_generate_text(
+    void* session,
+    const char* prompt,
+    char** response,
+    mlx_usage* usage);
+
+int mlxsharp_generate_embedding(
+    void* session,
+    const char* text,
+    float** embedding,
+    int* dimension,
+    mlx_usage* usage);
+
+int mlxsharp_generate_image(
+    void* session,
+    const char* prompt,
+    int width,
+    int height,
+    unsigned char** buffer,
+    int* length,
+    mlx_usage* usage);
+
+void mlxsharp_free_embedding(float* embedding);
+
+void mlxsharp_free_buffer(unsigned char* buffer);
+
+void mlxsharp_release_session(void* session);
+
 #ifdef __cplusplus
 }
 #endif
-

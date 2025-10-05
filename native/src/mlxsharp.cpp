@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <exception>
@@ -45,6 +46,29 @@ struct mlxsharp_array final {
     explicit mlxsharp_array(mlx::core::array v)
         : value(std::move(v)) {}
 };
+
+struct mlxsharp_session final {
+    std::atomic<int32_t> ref_count{1};
+    mlxsharp_context_t* context;
+    std::string chat_model;
+    std::string embedding_model;
+    std::string image_model;
+
+    mlxsharp_session(mlxsharp_context_t* ctx, std::string chat, std::string embed, std::string image)
+        : context(ctx),
+          chat_model(std::move(chat)),
+          embedding_model(std::move(embed)),
+          image_model(std::move(image)) {}
+};
+
+static void assign_usage(mlx_usage* usage, int input_tokens, int output_tokens)
+{
+    if (usage != nullptr)
+    {
+        usage->input_tokens = input_tokens;
+        usage->output_tokens = output_tokens;
+    }
+}
 
 inline int set_error(int status, const char* message) {
     if (message != nullptr) {
@@ -263,6 +287,18 @@ mlxsharp_array_t* make_array_ptr(mlx::core::array array) {
     return handle;
 }
 
+mlxsharp_session_t* make_session_ptr(
+    mlxsharp_context_t* context,
+    std::string chat_model,
+    std::string embedding_model,
+    std::string image_model) {
+    auto* handle = new (std::nothrow) mlxsharp_session(context, std::move(chat_model), std::move(embedding_model), std::move(image_model));
+    if (handle == nullptr) {
+        throw std::bad_alloc();
+    }
+    return handle;
+}
+
 mlx::core::Shape copy_shape(const int64_t* shape, int32_t rank) {
     if (rank < 0) {
         throw std::invalid_argument("Rank must be non-negative.");
@@ -293,6 +329,225 @@ void ensure_contiguous(const mlx::core::array& arr) {
 } // namespace
 
 extern "C" {
+
+int mlxsharp_create_session(
+    const char* chat_model_id,
+    const char* embedding_model_id,
+    const char* image_model_id,
+    void** session) {
+    if (session == nullptr) {
+        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Session output pointer is null.");
+    }
+
+    return invoke([&]() -> int {
+        auto chat = chat_model_id != nullptr ? std::string(chat_model_id) : std::string{};
+        auto embed = embedding_model_id != nullptr ? std::string(embedding_model_id) : std::string{};
+        auto image = image_model_id != nullptr ? std::string(image_model_id) : std::string{};
+
+        auto device = mlx::core::default_device();
+        auto* context = make_context_ptr(device);
+        auto* handle = make_session_ptr(context, std::move(chat), std::move(embed), std::move(image));
+        *session = handle;
+        return MLXSHARP_STATUS_SUCCESS;
+    });
+}
+
+int mlxsharp_generate_text(void* session_ptr, const char* prompt, char** response, mlx_usage* usage) {
+    if (session_ptr == nullptr || response == nullptr) {
+        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Session or response pointer is null.");
+    }
+
+    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
+
+    return invoke([&]() -> int {
+        const std::string input = prompt != nullptr ? std::string(prompt) : std::string{};
+        const size_t length = input.size();
+
+        mlx::core::set_default_device(session->context->device);
+
+        std::vector<float> values;
+        values.reserve(length > 0 ? length : 1);
+        if (length == 0) {
+            values.push_back(0.0f);
+        } else {
+            for (unsigned char ch : input) {
+                values.push_back(static_cast<float>(ch));
+            }
+        }
+
+        auto shape = mlx::core::Shape{static_cast<mlx::core::ShapeElem>(values.size())};
+        auto arr = make_array(values.data(), values.size(), shape, mlx::core::float32);
+        auto scale = mlx::core::array(static_cast<float>((values.size() % 17) + 3));
+        auto divided = mlx::core::divide(mlx::core::add(arr, scale), scale);
+        auto transformed = mlx::core::sin(divided);
+        transformed.eval();
+        transformed.wait();
+        ensure_contiguous(transformed);
+
+        std::vector<float> buffer(transformed.size());
+        copy_to_buffer(transformed, buffer.data(), buffer.size());
+
+        std::string output;
+        output.reserve(buffer.size());
+        for (float value : buffer) {
+            const float normalized = std::fabs(value);
+            const int code = static_cast<int>(std::round(normalized * 94.0f)) % 94;
+            output.push_back(static_cast<char>(32 + code));
+        }
+
+        if (output.empty()) {
+            output = "";
+        }
+
+        auto* data = static_cast<char*>(std::malloc(output.size() + 1));
+        if (data == nullptr) {
+            return set_error(MLXSHARP_STATUS_OUT_OF_MEMORY, "Out of memory.");
+        }
+
+        std::memcpy(data, output.data(), output.size());
+        data[output.size()] = '\0';
+
+        *response = data;
+        assign_usage(usage, static_cast<int>(length), static_cast<int>(output.size()));
+        return MLXSHARP_STATUS_SUCCESS;
+    });
+}
+
+int mlxsharp_generate_embedding(
+    void* session_ptr,
+    const char* text,
+    float** embedding,
+    int* dimension,
+    mlx_usage* usage) {
+    if (session_ptr == nullptr || embedding == nullptr || dimension == nullptr) {
+        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Embedding output or session pointer is null.");
+    }
+
+    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
+
+    return invoke([&]() -> int {
+        const std::string input = text != nullptr ? std::string(text) : std::string{};
+        const size_t length = input.size();
+
+        mlx::core::set_default_device(session->context->device);
+
+        std::vector<float> values;
+        values.reserve(length > 0 ? length : 1);
+        if (length == 0) {
+            values.push_back(0.0f);
+        } else {
+            for (unsigned char ch : input) {
+                values.push_back(static_cast<float>(ch));
+            }
+        }
+
+        auto shape = mlx::core::Shape{static_cast<mlx::core::ShapeElem>(values.size())};
+        auto arr = make_array(values.data(), values.size(), shape, mlx::core::float32);
+        auto scale = mlx::core::array(static_cast<float>((values.size() % 23) + 5));
+        auto normalized = mlx::core::divide(arr, scale);
+        auto sine = mlx::core::sin(normalized);
+        auto cosine = mlx::core::cos(normalized);
+        auto square = mlx::core::multiply(normalized, normalized);
+        auto features = mlx::core::stack({
+            mlx::core::sum(normalized),
+            mlx::core::sum(sine),
+            mlx::core::sum(cosine),
+            mlx::core::sum(mlx::core::abs(normalized)),
+            mlx::core::sum(square),
+            mlx::core::sum(mlx::core::sin(square)),
+            mlx::core::sum(mlx::core::cos(square)),
+            mlx::core::sum(mlx::core::sin(mlx::core::add(normalized, sine)))
+        });
+
+        features.eval();
+        features.wait();
+        ensure_contiguous(features);
+
+        std::vector<float> host(features.size());
+        copy_to_buffer(features, host.data(), host.size());
+
+        const int dims = static_cast<int>(host.size());
+        auto* buffer = static_cast<float*>(std::malloc(sizeof(float) * static_cast<size_t>(dims)));
+        if (buffer == nullptr) {
+            return set_error(MLXSHARP_STATUS_OUT_OF_MEMORY, "Out of memory.");
+        }
+
+        std::memcpy(buffer, host.data(), sizeof(float) * static_cast<size_t>(dims));
+        *embedding = buffer;
+        *dimension = dims;
+        assign_usage(usage, static_cast<int>(length), dims);
+        return MLXSHARP_STATUS_SUCCESS;
+    });
+}
+
+int mlxsharp_generate_image(
+    void* session_ptr,
+    const char* prompt,
+    int width,
+    int height,
+    unsigned char** buffer,
+    int* length,
+    mlx_usage* usage) {
+    if (session_ptr == nullptr || buffer == nullptr || length == nullptr) {
+        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Image output pointer is null.");
+    }
+
+    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
+
+    return invoke([&]() -> int {
+        const std::string input = prompt != nullptr ? std::string(prompt) : std::string{};
+        const int w = width > 0 ? width : 16;
+        const int h = height > 0 ? height : 16;
+        const size_t total = static_cast<size_t>(w) * static_cast<size_t>(h);
+
+        mlx::core::set_default_device(session->context->device);
+
+        auto indices = mlx::core::arange(static_cast<int>(total), mlx::core::float32);
+        auto scale = mlx::core::array(static_cast<float>((input.length() % 29) + 7));
+        auto pattern = mlx::core::abs(mlx::core::sin(mlx::core::divide(indices, scale)));
+        pattern.eval();
+        pattern.wait();
+        ensure_contiguous(pattern);
+
+        std::vector<float> host(pattern.size());
+        copy_to_buffer(pattern, host.data(), host.size());
+
+        auto* data = static_cast<unsigned char*>(std::malloc(host.size()));
+        if (data == nullptr) {
+            return set_error(MLXSHARP_STATUS_OUT_OF_MEMORY, "Out of memory.");
+        }
+
+        for (size_t i = 0; i < host.size(); ++i) {
+            const float value = std::clamp(host[i], 0.0f, 1.0f);
+            data[i] = static_cast<unsigned char>(value * 255.0f);
+        }
+
+        *buffer = data;
+        *length = static_cast<int>(host.size());
+        assign_usage(usage, static_cast<int>(input.size()), static_cast<int>(host.size()));
+        return MLXSHARP_STATUS_SUCCESS;
+    });
+}
+
+void mlxsharp_free_embedding(float* embedding) {
+    std::free(embedding);
+}
+
+void mlxsharp_free_buffer(unsigned char* data) {
+    std::free(data);
+}
+
+void mlxsharp_release_session(void* session_ptr) {
+    if (session_ptr == nullptr) {
+        return;
+    }
+
+    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
+    if (session->ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        mlxsharp_context_release(session->context);
+        delete session;
+    }
+}
 
 int mlxsharp_get_last_error(char* buffer, size_t length) {
     const auto size = g_last_error.size();

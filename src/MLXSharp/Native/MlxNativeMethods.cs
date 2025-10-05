@@ -18,6 +18,27 @@ internal static partial class MlxNativeMethods
 {
     private const string LibraryName = "libmlxsharp";
 
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_create_session", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int CreateSession(string chatModelId, string embeddingModelId, string imageModelId, out SafeMlxSessionHandle session);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_release_session")]
+    public static partial void ReleaseSession(nint session);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_generate_text", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int GenerateText(SafeMlxSessionHandle session, string prompt, out MlxNativeStringHandle response, out MlxUsage usage);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_generate_embedding", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int GenerateEmbedding(SafeMlxSessionHandle session, string text, out nint embeddingPointer, out int dimension, out MlxUsage usage);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_free_embedding")]
+    public static partial void FreeEmbedding(nint embeddingPointer);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_generate_image", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int GenerateImage(SafeMlxSessionHandle session, string prompt, int width, int height, out nint bufferPointer, out int length, out MlxUsage usage);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_free_buffer")]
+    public static partial void FreeBuffer(nint bufferPointer);
+
     public static string GetLastErrorString()
     {
         Span<byte> initial = stackalloc byte[256];
@@ -113,4 +134,11 @@ internal static partial class MlxNativeMethods
         SafeMlxArrayHandle left,
         SafeMlxArrayHandle right,
         out SafeMlxArrayHandle result);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MlxUsage
+{
+    public int InputTokens;
+    public int OutputTokens;
 }
