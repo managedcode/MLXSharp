@@ -37,7 +37,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libopenblas-dev liblapack-dev
+          sudo apt-get install -y build-essential cmake libopenblas-dev liblapack-dev liblapacke-dev
 
       - name: Configure native build
         run: cmake -S native -B native/build/linux -DCMAKE_BUILD_TYPE=Release
