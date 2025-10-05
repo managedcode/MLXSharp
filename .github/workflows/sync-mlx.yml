@@ -44,6 +44,12 @@ jobs:
             echo "update_needed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Prepare update branch
+        if: steps.mlx.outputs.update_needed == 'true'
+        env:
+          BRANCH: chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}
+        run: git checkout -B "$BRANCH"
+
       - name: Update MLX submodule
         if: steps.mlx.outputs.update_needed == 'true'
         run: |
@@ -74,31 +80,86 @@ jobs:
           props_path.write_text(text)
           PY
           git add Directory.Build.props
-      - name: Setup .NET
+
+      - name: Commit changes
         if: steps.mlx.outputs.update_needed == 'true'
+        id: commit
+        env:
+          TAG: ${{ steps.mlx.outputs.latest_tag }}
+        run: |
+          if git diff --cached --quiet; then
+            echo "No staged changes to commit"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore: sync MLX to ${TAG}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Setup .NET
+        if: steps.commit.outputs.changed == 'true'
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
 
       - name: Build solution
-        if: steps.mlx.outputs.update_needed == 'true'
+        if: steps.commit.outputs.changed == 'true'
         run: |
           dotnet restore
           dotnet build --configuration Release --no-restore
 
-      - name: Prepare PR
-        if: steps.mlx.outputs.update_needed == 'true'
+      - name: Push changes
+        if: steps.commit.outputs.changed == 'true'
+        env:
+          BRANCH: chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}
         run: |
-          git status -s
+          git push --force --set-upstream origin "$BRANCH"
 
-      - name: Create pull request
-        if: steps.mlx.outputs.update_needed == 'true'
-        uses: peter-evans/create-pull-request@v6
-        with:
-          branch: "chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}"
-          commit-message: "chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}"
-          title: "chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}"
-          body: |
+      - name: Create or update pull request
+        if: steps.commit.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          BRANCH: chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}
+          PR_TITLE: chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}
+          PR_BODY: |
             - Update `extern/mlx` submodule to `${{ steps.mlx.outputs.latest_tag }}`
             - Align package version fields to `${{ steps.mlx.outputs.latest_version }}`
-          signoff: false
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const branch = process.env.BRANCH;
+            const title = process.env.PR_TITLE;
+            const body = process.env.PR_BODY;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const base = context.payload.repository.default_branch;
+
+            const { data: existing } = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+            });
+
+            if (existing.length > 0) {
+              const pr = existing[0];
+              await github.rest.pulls.update({
+                owner,
+                repo,
+                pull_number: pr.number,
+                title,
+                body,
+              });
+              core.info(`Updated PR ${pr.html_url}`);
+            } else {
+              const { data: pr } = await github.rest.pulls.create({
+                owner,
+                repo,
+                head: branch,
+                base,
+                title,
+                body,
+              });
+              core.info(`Created PR ${pr.html_url}`);
+            }
