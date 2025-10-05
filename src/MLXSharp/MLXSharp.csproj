@@ -11,6 +11,12 @@
     <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','libmlxsharp.dylib'))</MLXSharpMacNativeBinary>
     <MLXSharpMacNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','osx-arm64','native','libmlxsharp.dylib'))</MLXSharpMacNativeDestination>
     <MLXSharpSkipMacNativeValidation Condition="'$(MLXSharpSkipMacNativeValidation)' == ''">false</MLXSharpSkipMacNativeValidation>
+    <MLXSharpMacNativeDestinationDir>$([System.IO.Path]::GetDirectoryName('$(MLXSharpMacNativeDestination)'))</MLXSharpMacNativeDestinationDir>
+
+    <MLXSharpLinuxNativeBinary Condition="'$(MLXSharpLinuxNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','linux','libmlxsharp.so'))</MLXSharpLinuxNativeBinary>
+    <MLXSharpLinuxNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','linux-x64','native','libmlxsharp.so'))</MLXSharpLinuxNativeDestination>
+    <MLXSharpSkipLinuxNativeValidation Condition="'$(MLXSharpSkipLinuxNativeValidation)' == ''">false</MLXSharpSkipLinuxNativeValidation>
+    <MLXSharpLinuxNativeDestinationDir>$([System.IO.Path]::GetDirectoryName('$(MLXSharpLinuxNativeDestination)'))</MLXSharpLinuxNativeDestinationDir>
   </PropertyGroup>
 
   <Target Name="EnsureMacNativeBinary"
@@ -41,6 +47,36 @@
 
     <Error Condition="'$(MLXSharpSkipMacNativeValidation)' != 'true' and !Exists('$(MLXSharpMacNativeDestination)')"
            Text="libmlxsharp.dylib is missing. Build the native library or supply MLXSharpMacNativeBinary before packing." />
+  </Target>
+
+  <Target Name="EnsureLinuxNativeBinary"
+          BeforeTargets="Pack"
+          Condition="'$(MSBuildProjectFullPath)' == '$(MSBuildThisFileFullPath)'">
+    <ItemGroup>
+      <_LinuxNativeSource Include="$(MLXSharpLinuxNativeBinary)"
+                          Condition="Exists('$(MLXSharpLinuxNativeBinary)')" />
+    </ItemGroup>
+
+    <MakeDir Directories="$(MLXSharpLinuxNativeDestinationDir)"
+             Condition="'$(MLXSharpLinuxNativeDestinationDir)' != ''" />
+
+    <Copy SourceFiles="@(_LinuxNativeSource)"
+          DestinationFiles="$(MLXSharpLinuxNativeDestination)"
+          SkipUnchangedFiles="true"
+          Condition="'@(_LinuxNativeSource)' != ''" />
+
+    <ItemGroup>
+      <None Include="$(MLXSharpLinuxNativeDestination)"
+            Condition="Exists('$(MLXSharpLinuxNativeDestination)')">
+        <Pack>true</Pack>
+        <PackagePath>runtimes/linux-x64/native/%(Filename)%(Extension)</PackagePath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes\linux-x64\native\%(Filename)%(Extension)</Link>
+      </None>
+    </ItemGroup>
+
+    <Error Condition="'$(MLXSharpSkipLinuxNativeValidation)' != 'true' and !Exists('$(MLXSharpLinuxNativeDestination)')"
+           Text="libmlxsharp.so is missing. Build the native library or supply MLXSharpLinuxNativeBinary before packing." />
   </Target>
 
   <!-- Include native binaries embedded in this project -->
