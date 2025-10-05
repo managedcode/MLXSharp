@@ -8,7 +8,6 @@ The design mirrors the packaging approach from projects such as [LLamaSharp](htt
 - `IChatClient`, `IEmbeddingGenerator<string, Embedding<float)>`, and image generation helpers that adhere to the `Microsoft.Extensions.AI` abstractions.
 - Builder-based backend configuration with a deterministic managed implementation for tests and a P/Invoke powered native backend.
 - Native library resolver that probes application directories, `MLXSHARP_LIBRARY`, or packaged runtimes and loads `libmlxsharp` on demand.
-- `MLXSharp.Native` packaging project that ships stub binaries for CI (Linux x64 today) and a placeholder `osx-arm64` folder for the production MLX wrapper.
 - Dependency injection extensions (`AddMlx`) in **MLXSharp** package.
 - Semantic Kernel integration (`AddMlxChatCompletion`) in separate **MLXSharp.SemanticKernel** package.
 - Integration test suite that exercises chat, embedding, image, and Semantic Kernel flows against both managed and native backends.
@@ -19,8 +18,8 @@ The design mirrors the packaging approach from projects such as [LLamaSharp](htt
 ├── extern/mlx                      # Git submodule with the official MLX sources
 ├── native/                         # Native wrapper scaffold (CMake project)
 ├── src/MLXSharp/                   # Managed library with Microsoft.Extensions.AI adapters
+├── src/MLXSharp.Native/            # Native runtime packaging project with stub binaries
 ├── src/MLXSharp.SemanticKernel/    # Semantic Kernel integration (separate package)
-├── src/MLXSharp.Native/            # NuGet-ready container for native binaries
 └── src/MLXSharp.Tests/             # Integration tests covering DI and Semantic Kernel
 ```
 
@@ -81,9 +80,11 @@ dotnet add package MLXSharp
 
 This package contains:
 - Managed DLL with `Microsoft.Extensions.AI` implementations
-- Native libraries in `runtimes/{rid}/native/`:
-  - `runtimes/linux-x64/native/libmlxsharp.so` - stub for CI/testing
+- Native assets in `runtimes/{rid}/native/`:
+  - `runtimes/linux-x64/native/libmlxsharp.so.b64` - Base64-encoded stub that `MlxNativeLibrary` expands for CI/testing
   - `runtimes/osx-arm64/native/libmlxsharp.dylib` - built in CI on macOS
+
+`MlxNativeLibrary` materialises `libmlxsharp.so` from the encoded payload on first use so Git history stays free of binary blobs while tests retain deterministic behaviour.
 
 ### MLXSharp.SemanticKernel [![NuGet](https://img.shields.io/nuget/v/MLXSharp.SemanticKernel.svg)](https://www.nuget.org/packages/MLXSharp.SemanticKernel)
 
