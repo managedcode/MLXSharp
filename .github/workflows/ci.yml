@@ -98,7 +98,7 @@ jobs:
             echo "Inspecting ${package}"
             filename=$(basename "${package}")
             case "${filename}" in
-              MLXSharp.*.nupkg)
+              MLXSharp.[0-9]*.nupkg)
                 if unzip -l "${package}" | grep -q "runtimes/osx-arm64/native/libmlxsharp.dylib"; then
                   echo "  ✓ Native library found"
                 else
