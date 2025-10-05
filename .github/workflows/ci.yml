@@ -155,7 +155,13 @@ jobs:
           ls -la "$TEST_OUTPUT/runtimes/osx-arm64/native/"
 
       - name: Run tests
-        run: dotnet test --configuration Release --no-build --logger "trx;LogFileName=TestResults.trx" --results-directory artifacts/test-results
+        run: |
+          dotnet test \
+            --configuration Release \
+            --no-build \
+            --logger "trx;LogFileName=TestResults.trx" \
+            --logger "console;verbosity=detailed" \
+            --results-directory artifacts/test-results
         env:
           MLXSHARP_MODEL_PATH: ${{ github.workspace }}/models/Qwen1.5-0.5B-Chat-4bit
 
@@ -240,6 +246,13 @@ jobs:
           name: test-results
           path: artifacts/test-results
 
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-test-results@v1
+        with:
+          test-results: artifacts/test-results/TestResults.trx
+          check-name: dotnet tests
+
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: package-test
@@ -249,6 +262,27 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Determine MLX version
+        id: mlx_version
+        run: |
+          git submodule update --init --recursive
+          git -C extern/mlx fetch --tags
+
+          if MLX_TAG=$(git -C extern/mlx describe --tags --abbrev=0 2>/dev/null); then
+            echo "Detected MLX tag: ${MLX_TAG}"
+          else
+            echo "::warning::Unable to determine MLX tag; falling back to commit hash"
+            MLX_TAG="unknown"
+          fi
+
+          MLX_COMMIT=$(git -C extern/mlx rev-parse --short HEAD)
+
+          echo "tag=${MLX_TAG}" >> "$GITHUB_OUTPUT"
+          echo "commit=${MLX_COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Extract version from Directory.Build.props
         id: version
@@ -297,6 +331,10 @@ jobs:
       - name: Generate release notes
         if: steps.check_tag.outputs.exists == 'false'
         id: release_notes
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+          MLX_TAG: ${{ steps.mlx_version.outputs.tag }}
+          MLX_COMMIT: ${{ steps.mlx_version.outputs.commit }}
         run: |
           PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
           if [ -z "$PREVIOUS_TAG" ]; then
@@ -309,9 +347,13 @@ jobs:
           echo "" >> release_notes.md
           echo "$COMMITS" >> release_notes.md
           echo "" >> release_notes.md
+          echo "## Upstream MLX" >> release_notes.md
+          echo "- Version: ${MLX_TAG}" >> release_notes.md
+          echo "- Commit: ${MLX_COMMIT}" >> release_notes.md
+          echo "" >> release_notes.md
           echo "## NuGet Packages" >> release_notes.md
-          echo "- [MLXSharp v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp/${{ steps.version.outputs.version }})" >> release_notes.md
-          echo "- [MLXSharp.SemanticKernel v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp.SemanticKernel/${{ steps.version.outputs.version }})" >> release_notes.md
+          echo "- [MLXSharp v${RELEASE_VERSION}](https://www.nuget.org/packages/MLXSharp/${RELEASE_VERSION})" >> release_notes.md
+          echo "- [MLXSharp.SemanticKernel v${RELEASE_VERSION}](https://www.nuget.org/packages/MLXSharp.SemanticKernel/${RELEASE_VERSION})" >> release_notes.md
 
           cat release_notes.md
 
