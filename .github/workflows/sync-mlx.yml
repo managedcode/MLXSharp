@@ -95,9 +95,9 @@ jobs:
         if: steps.mlx.outputs.update_needed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          branch: chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}
-          commit-message: chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}
-          title: chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}
+          branch: "chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}"
+          commit-message: "chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}"
+          title: "chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}"
           body: |
             - Update `extern/mlx` submodule to `${{ steps.mlx.outputs.latest_tag }}`
             - Align package version fields to `${{ steps.mlx.outputs.latest_version }}`
