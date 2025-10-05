@@ -50,23 +50,29 @@ jobs:
           git -C extern/mlx checkout ${{ steps.mlx.outputs.latest_tag }}
           git add extern/mlx
 
+      - name: Setup Python
+        if: steps.mlx.outputs.update_needed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
       - name: Update package versions
         if: steps.mlx.outputs.update_needed == 'true'
         env:
           VERSION: ${{ steps.mlx.outputs.latest_version }}
         run: |
-          python <<'PY'
-import os
-import re
-from pathlib import Path
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
 
-version = os.environ["VERSION"]
-props_path = Path("Directory.Build.props")
-text = props_path.read_text()
-text = re.sub(r"<Version>[^<]+</Version>", f"<Version>{version}</Version>", text)
-text = re.sub(r"<PackageVersion>[^<]+</PackageVersion>", f"<PackageVersion>{version}</PackageVersion>", text)
-props_path.write_text(text)
-PY
+          version = os.environ["VERSION"]
+          props_path = Path("Directory.Build.props")
+          text = props_path.read_text()
+          text = re.sub(r"<Version>[^<]+</Version>", f"<Version>{version}</Version>", text)
+          text = re.sub(r"<PackageVersion>[^<]+</PackageVersion>", f"<PackageVersion>{version}</PackageVersion>", text)
+          props_path.write_text(text)
+          PY
           git add Directory.Build.props
       - name: Setup .NET
         if: steps.mlx.outputs.update_needed == 'true'
