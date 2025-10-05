@@ -1,0 +1,98 @@
+name: Sync MLX
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  update-mlx:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Determine MLX release state
+        id: mlx
+        run: |
+          git submodule update --init --recursive extern/mlx
+          git -C extern/mlx fetch --tags origin
+
+          LATEST_TAG=$(git -C extern/mlx for-each-ref --sort=-version:refname --format='%(refname:strip=2)' refs/tags | grep '^v' | head -n 1)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "::error::Failed to determine latest MLX tag"
+            exit 1
+          fi
+
+          CURRENT_TAG=$(git -C extern/mlx describe --tags --abbrev=0 2>/dev/null || echo "")
+
+          echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "current_tag=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "latest_version=${LATEST_TAG#v}" >> "$GITHUB_OUTPUT"
+
+          if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
+            echo "MLX submodule already at ${CURRENT_TAG}"
+            echo "update_needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "MLX update required: ${CURRENT_TAG:-unknown} -> ${LATEST_TAG}"
+            echo "update_needed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update MLX submodule
+        if: steps.mlx.outputs.update_needed == 'true'
+        run: |
+          git -C extern/mlx checkout ${{ steps.mlx.outputs.latest_tag }}
+          git add extern/mlx
+
+      - name: Update package versions
+        if: steps.mlx.outputs.update_needed == 'true'
+        env:
+          VERSION: ${{ steps.mlx.outputs.latest_version }}
+        run: |
+          python <<'PY'
+import os
+import re
+from pathlib import Path
+
+version = os.environ["VERSION"]
+props_path = Path("Directory.Build.props")
+text = props_path.read_text()
+text = re.sub(r"<Version>[^<]+</Version>", f"<Version>{version}</Version>", text)
+text = re.sub(r"<PackageVersion>[^<]+</PackageVersion>", f"<PackageVersion>{version}</PackageVersion>", text)
+props_path.write_text(text)
+PY
+          git add Directory.Build.props
+      - name: Setup .NET
+        if: steps.mlx.outputs.update_needed == 'true'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Build solution
+        if: steps.mlx.outputs.update_needed == 'true'
+        run: |
+          dotnet restore
+          dotnet build --configuration Release --no-restore
+
+      - name: Prepare PR
+        if: steps.mlx.outputs.update_needed == 'true'
+        run: |
+          git status -s
+
+      - name: Create pull request
+        if: steps.mlx.outputs.update_needed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/sync-mlx-${{ steps.mlx.outputs.latest_version }}
+          commit-message: chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}
+          title: chore: sync MLX to ${{ steps.mlx.outputs.latest_tag }}
+          body: |
+            - Update `extern/mlx` submodule to `${{ steps.mlx.outputs.latest_tag }}`
+            - Align package version fields to `${{ steps.mlx.outputs.latest_version }}`
+          signoff: false
