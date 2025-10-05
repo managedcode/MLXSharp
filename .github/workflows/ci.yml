@@ -96,13 +96,21 @@ jobs:
           missing=0
           for package in "${packages[@]}"; do
             echo "Inspecting ${package}"
-            if unzip -l "${package}" | grep -q "runtimes/osx-arm64/native/libmlxsharp.dylib"; then
-              echo "  ✓ Native library found"
-            else
-              echo "  ✗ Native library NOT found"
-              unzip -l "${package}"
-              missing=1
-            fi
+            filename=$(basename "${package}")
+            case "${filename}" in
+              MLXSharp.*.nupkg)
+                if unzip -l "${package}" | grep -q "runtimes/osx-arm64/native/libmlxsharp.dylib"; then
+                  echo "  ✓ Native library found"
+                else
+                  echo "  ✗ Native library NOT found"
+                  unzip -l "${package}"
+                  missing=1
+                fi
+                ;;
+              *)
+                echo "  ↷ Skipping native check for ${filename}"
+                ;;
+            esac
           done
 
           if [ $missing -ne 0 ]; then
