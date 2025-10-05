@@ -16,7 +16,7 @@ dotnet test
 brew install cmake
 cmake -S native -B native/build -DCMAKE_BUILD_TYPE=Release
 cmake --build native/build --target mlxsharp
-cp native/build/libmlxsharp.dylib src/MLXSharp.Native/runtimes/osx-arm64/native/
+cp native/build/libmlxsharp.dylib src/MLXSharp/runtimes/osx-arm64/native/
 ```
 
 Stub версія лінкується з MLX але повертає тестові дані замість реальних результатів моделі.

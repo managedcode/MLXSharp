@@ -17,8 +17,7 @@ The design mirrors the packaging approach from projects such as [LLamaSharp](htt
 ```
 ├── extern/mlx                      # Git submodule with the official MLX sources
 ├── native/                         # Native wrapper scaffold (CMake project)
-├── src/MLXSharp/                   # Managed library with Microsoft.Extensions.AI adapters
-├── src/MLXSharp.Native/            # Native runtime packaging project with stub binaries
+├── src/MLXSharp/                   # Managed library with Microsoft.Extensions.AI adapters + packaged runtimes
 ├── src/MLXSharp.SemanticKernel/    # Semantic Kernel integration (separate package)
 └── src/MLXSharp.Tests/             # Integration tests covering DI and Semantic Kernel
 ```
@@ -100,7 +99,7 @@ This package depends on MLXSharp and adds Semantic Kernel chat completion servic
 
 GitHub Actions automatically:
 1. Compiles native wrapper with MLX submodule
-2. Copies `libmlxsharp.dylib` to `src/MLXSharp.Native/runtimes/osx-arm64/native/`
+2. Copies `libmlxsharp.dylib` to `src/MLXSharp/runtimes/osx-arm64/native/`
 3. Packs managed + native together in NuGet package
 
 At runtime `MlxNativeLibrary` automatically finds the right library:

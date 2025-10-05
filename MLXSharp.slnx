@@ -1,11 +1,5 @@
 <Solution>
-  <Configurations>
-    <Platform Name="Any CPU" />
-    <Platform Name="x64" />
-    <Platform Name="x86" />
-  </Configurations>
   <Folder Name="/src/">
-    <Project Path="src/MLXSharp.Native/MLXSharp.Native.csproj" />
     <Project Path="src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj" />
     <Project Path="src/MLXSharp.Tests/MLXSharp.Tests.csproj" />
     <Project Path="src/MLXSharp/MLXSharp.csproj" />
