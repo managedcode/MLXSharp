@@ -6,4 +6,13 @@
   <ItemGroup>
     <ProjectReference Include="..\MLXSharp\MLXSharp.csproj" />
   </ItemGroup>
+
+  <!-- NuGet metadata -->
+  <PropertyGroup>
+    <Title>ManagedCode.MLXSharp.SemanticKernel</Title>
+    <PackageId>ManagedCode.MLXSharp.SemanticKernel</PackageId>
+    <Description>Semantic Kernel chat completion integration built on top of MLXSharp.</Description>
+    <PackageTags>managedcode;mlx;semantic-kernel;ai;dotnet;chat;apple</PackageTags>
+  </PropertyGroup>
+
 </Project>

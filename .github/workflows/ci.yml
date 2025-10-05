@@ -257,71 +257,71 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # - name: Check if tag exists
-      #   id: check_tag
-      #   run: |
-      #     if git ls-remote --tags origin | grep -q "refs/tags/v${{ steps.version.outputs.version }}"; then
-      #       echo "exists=true" >> $GITHUB_OUTPUT
-      #       echo "Tag v${{ steps.version.outputs.version }} already exists"
-      #     else
-      #       echo "exists=false" >> $GITHUB_OUTPUT
-      #       echo "Tag v${{ steps.version.outputs.version }} does not exist"
-      #     fi
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git ls-remote --tags origin | grep -q "refs/tags/v${{ steps.version.outputs.version }}"; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "Tag v${{ steps.version.outputs.version }} does not exist"
+          fi
 
-      # - name: Download package artifacts
-      #   if: steps.check_tag.outputs.exists == 'false'
-      #   uses: actions/download-artifact@v4
-      #   with:
-      #     name: packages
-      #     path: artifacts/packages
+      - name: Download package artifacts
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: artifacts/packages
 
-      # - name: Publish to NuGet
-      #   if: steps.check_tag.outputs.exists == 'false'
-      #   run: |
-      #     for package in artifacts/packages/*.nupkg; do
-      #       echo "Publishing $package..."
-      #       dotnet nuget push "$package" \
-      #         --api-key ${{ secrets.NUGET_API_KEY }} \
-      #         --source https://api.nuget.org/v3/index.json \
-      #         --skip-duplicate || true
-      #     done
+      - name: Publish to NuGet
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          for package in artifacts/packages/*.nupkg; do
+            echo "Publishing $package..."
+            dotnet nuget push "$package" \
+              --api-key ${{ secrets.NUGET_API_KEY }} \
+              --source https://api.nuget.org/v3/index.json \
+              --skip-duplicate || true
+          done
 
-      # - name: Create Git tag
-      #   if: steps.check_tag.outputs.exists == 'false'
-      #   run: |
-      #     git config user.name "github-actions[bot]"
-      #     git config user.email "github-actions[bot]@users.noreply.github.com"
-      #     git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
-      #     git push origin "v${{ steps.version.outputs.version }}"
+      - name: Create Git tag
+        if: steps.check_tag.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
-      # - name: Generate release notes
-      #   if: steps.check_tag.outputs.exists == 'false'
-      #   id: release_notes
-      #   run: |
-      #     PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
-      #     if [ -z "$PREVIOUS_TAG" ]; then
-      #       COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
-      #     else
-      #       COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
-      #     fi
+      - name: Generate release notes
+        if: steps.check_tag.outputs.exists == 'false'
+        id: release_notes
+        run: |
+          PREVIOUS_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1) 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
+          else
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
+          fi
 
-      #     echo "## What's Changed" > release_notes.md
-      #     echo "" >> release_notes.md
-      #     echo "$COMMITS" >> release_notes.md
-      #     echo "" >> release_notes.md
-      #     echo "## NuGet Packages" >> release_notes.md
-      #     echo "- [MLXSharp v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp/${{ steps.version.outputs.version }})" >> release_notes.md
-      #     echo "- [MLXSharp.SemanticKernel v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp.SemanticKernel/${{ steps.version.outputs.version }})" >> release_notes.md
+          echo "## What's Changed" > release_notes.md
+          echo "" >> release_notes.md
+          echo "$COMMITS" >> release_notes.md
+          echo "" >> release_notes.md
+          echo "## NuGet Packages" >> release_notes.md
+          echo "- [MLXSharp v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp/${{ steps.version.outputs.version }})" >> release_notes.md
+          echo "- [MLXSharp.SemanticKernel v${{ steps.version.outputs.version }}](https://www.nuget.org/packages/MLXSharp.SemanticKernel/${{ steps.version.outputs.version }})" >> release_notes.md
 
-      #     cat release_notes.md
+          cat release_notes.md
 
-      # - name: Create GitHub Release
-      #   if: steps.check_tag.outputs.exists == 'false'
-      #   uses: softprops/action-gh-release@v1
-      #   with:
-      #     tag_name: v${{ steps.version.outputs.version }}
-      #     name: Release v${{ steps.version.outputs.version }}
-      #     body_path: release_notes.md
-      #     files: artifacts/packages/*
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create GitHub Release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Release v${{ steps.version.outputs.version }}
+          body_path: release_notes.md
+          files: artifacts/packages/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
