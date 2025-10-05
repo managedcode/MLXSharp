@@ -7,12 +7,21 @@
   <PropertyGroup>
     <Title>ManagedCode.MLXSharp</Title>
     <PackageId>ManagedCode.MLXSharp</PackageId>
-    <Description>.NET bindings for Apple MLX with Microsoft.Extensions.AI integration and packaged native runtimes.</Description>
-    <PackageTags>managedcode;mlx;apple;ai;dotnet;microsoft-extensions-ai;native</PackageTags>
+    <Description>.NET bindings for Apple MLX with comprehensive native interop coverage.</Description>
+    <PackageTags>managedcode;mlx;apple;dotnet;native;tensor;ml</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.AI" Version="9.9.1" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="9.9.1" Condition="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Backends\**\*.cs" />
+    <Compile Remove="Clients\**\*.cs" />
+    <Compile Remove="DependencyInjection\**\*.cs" />
+    <Compile Remove="MlxClientOptions.cs" />
+    <Compile Remove="MlxImageOptions.cs" />
+    <Compile Remove="MlxRequests.cs" />
   </ItemGroup>
 
   <PropertyGroup>

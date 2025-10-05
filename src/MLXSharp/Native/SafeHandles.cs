@@ -3,9 +3,9 @@ using System.Runtime.InteropServices;
 
 namespace MLXSharp.Native;
 
-internal sealed class SafeMlxSessionHandle : SafeHandle
+internal sealed class SafeMlxContextHandle : SafeHandle
 {
-    public SafeMlxSessionHandle()
+    public SafeMlxContextHandle()
         : base(nint.Zero, ownsHandle: true)
     {
     }
@@ -16,16 +16,16 @@ internal sealed class SafeMlxSessionHandle : SafeHandle
     {
         if (!IsInvalid)
         {
-            MlxNativeMethods.ReleaseSession(handle);
+            MlxNativeMethods.ContextRelease(handle);
         }
 
         return true;
     }
 }
 
-internal sealed class MlxNativeStringHandle : SafeHandle
+internal sealed class SafeMlxArrayHandle : SafeHandle
 {
-    public MlxNativeStringHandle()
+    public SafeMlxArrayHandle()
         : base(nint.Zero, ownsHandle: true)
     {
     }
@@ -36,11 +36,10 @@ internal sealed class MlxNativeStringHandle : SafeHandle
     {
         if (!IsInvalid)
         {
-            MlxNativeMethods.FreeBuffer(handle);
+            MlxNativeMethods.ArrayRelease(handle);
         }
 
         return true;
     }
-
-    public string GetString() => IsInvalid ? string.Empty : Marshal.PtrToStringUTF8(handle) ?? string.Empty;
 }
+

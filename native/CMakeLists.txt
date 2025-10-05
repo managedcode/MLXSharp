@@ -15,12 +15,15 @@ endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/../extern/mlx ${CMAKE_BINARY_DIR}/extern/mlx EXCLUDE_FROM_ALL)
 
-# Stub implementation for testing and development
-add_library(mlxsharp SHARED src/mlxsharp.cpp)
+add_library(mlxsharp SHARED
+    src/mlxsharp.cpp
+)
 
 target_link_libraries(mlxsharp PRIVATE mlx)
 
-target_include_directories(mlxsharp PRIVATE ${CMAKE_SOURCE_DIR}/../extern/mlx/mlx)
+target_include_directories(mlxsharp
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_SOURCE_DIR}/../extern/mlx/mlx)
 
 target_compile_definitions(mlxsharp PRIVATE MLXSHARP_EXPORTS)
 

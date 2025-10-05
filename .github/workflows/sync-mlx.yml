@@ -31,9 +31,13 @@ jobs:
           fi
 
           CURRENT_TAG=$(git -C extern/mlx describe --tags --abbrev=0 2>/dev/null || echo "")
+          CURRENT_COMMIT=$(git -C extern/mlx rev-parse --short HEAD 2>/dev/null || echo "")
+          LATEST_COMMIT=$(git -C extern/mlx rev-list -n 1 "${LATEST_TAG}")
 
           echo "latest_tag=${LATEST_TAG}" >> "$GITHUB_OUTPUT"
+          echo "latest_commit=${LATEST_COMMIT}" >> "$GITHUB_OUTPUT"
           echo "current_tag=${CURRENT_TAG}" >> "$GITHUB_OUTPUT"
+          echo "current_commit=${CURRENT_COMMIT}" >> "$GITHUB_OUTPUT"
           echo "latest_version=${LATEST_TAG#v}" >> "$GITHUB_OUTPUT"
 
           if [ "$CURRENT_TAG" = "$LATEST_TAG" ]; then
@@ -163,3 +167,60 @@ jobs:
               });
               core.info(`Created PR ${pr.html_url}`);
             }
+
+      - name: Create tracking issue
+        if: steps.commit.outputs.changed == 'true'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_TITLE: "Review bindings for MLX ${{ steps.mlx.outputs.latest_tag }}"
+          LATEST_TAG: ${{ steps.mlx.outputs.latest_tag }}
+          LATEST_COMMIT: ${{ steps.mlx.outputs.latest_commit }}
+          CURRENT_TAG: ${{ steps.mlx.outputs.current_tag }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueTitle = process.env.ISSUE_TITLE.replace(/\s+/g, ' ').trim();
+            const latestTag = process.env.LATEST_TAG;
+            const latestCommit = process.env.LATEST_COMMIT;
+            const previousTag = process.env.CURRENT_TAG && process.env.CURRENT_TAG.length > 0 ? process.env.CURRENT_TAG : 'unknown';
+            const compareBase = previousTag === 'unknown' ? latestTag : previousTag;
+            const compareUrl = `https://github.com/ml-explore/mlx/compare/${compareBase}...${latestTag}`;
+
+            const issueBody = [
+              `The upstream MLX submodule updated to \`${latestTag}\`.`,
+              '',
+              'Please review the upstream diff and ensure the C API (`native/include/mlxsharp/api.h`) and managed bindings stay in sync.',
+              '',
+              `- Upstream tag: \`${latestTag}\``,
+              `- Upstream commit: \`${latestCommit}\``,
+              `- Previous tag: \`${previousTag}\``,
+              `- Compare: ${compareUrl}`,
+              '',
+              'Track interface updates, adjust `native/src/mlxsharp.cpp`, refresh docs/tests as needed.'
+            ].join('\n');
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner,
+              repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const existing = issues.find(issue => issue.title === issueTitle);
+            if (existing) {
+              core.info(`Issue already exists: ${existing.html_url}`);
+              return;
+            }
+
+            const { data: created } = await github.rest.issues.create({
+              owner,
+              repo,
+              title: issueTitle,
+              body: issueBody,
+              assignees: ['copoit'],
+              labels: ['dependency-update'],
+            });
+
+            core.info(`Created issue ${created.html_url}`);
