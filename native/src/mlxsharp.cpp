@@ -19,6 +19,7 @@
 #include <mlx/ops.h>
 #include <mlx/stream.h>
 #include <mlx/transforms.h>
+#include <mlx/types/complex.h>
 
 struct mlxsharp_context {
     std::atomic<int32_t> ref_count{1};
@@ -30,7 +31,7 @@ struct mlxsharp_context {
 
 struct mlxsharp_array {
     std::atomic<int32_t> ref_count{1};
-    mlx::core::array value;
+    mutable mlx::core::array value;
 
     explicit mlxsharp_array(mlx::core::array v)
         : value(std::move(v)) {}
@@ -213,8 +214,18 @@ mlx::core::array make_array(
             return make_array_typed<double>(data, element_count, shape, dtype);
         case mlx::core::bfloat16:
             return make_array_typed<mlx::core::bfloat16_t>(data, element_count, shape, dtype);
-        case mlx::core::complex64:
-            return make_array_typed<std::complex<float>>(data, element_count, shape, dtype);
+        case mlx::core::complex64: {
+            if (data == nullptr) {
+                throw std::invalid_argument("Source buffer is null.");
+            }
+            const auto* typed = static_cast<const std::complex<float>*>(data);
+            std::vector<mlx::core::complex64_t> converted;
+            converted.reserve(element_count);
+            for (size_t i = 0; i < element_count; ++i) {
+                converted.emplace_back(typed[i]);
+            }
+            return mlx::core::array(converted.data(), shape, dtype);
+        }
     }
 
     throw std::invalid_argument(kUnsupportedDType);
@@ -264,8 +275,23 @@ int copy_to_buffer(const mlx::core::array& arr, void* destination, size_t elemen
             return copy_to_buffer_typed<double>(arr, destination, element_count);
         case mlx::core::bfloat16:
             return copy_to_buffer_typed<mlx::core::bfloat16_t>(arr, destination, element_count);
-        case mlx::core::complex64:
-            return copy_to_buffer_typed<std::complex<float>>(arr, destination, element_count);
+        case mlx::core::complex64: {
+            if (destination == nullptr) {
+                return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Destination buffer is null.");
+            }
+
+            auto total = arr.size();
+            if (total > element_count) {
+                return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Destination buffer is too small.");
+            }
+
+            const auto* source = arr.data<mlx::core::complex64_t>();
+            auto* out = static_cast<std::complex<float>*>(destination);
+            for (size_t i = 0; i < total; ++i) {
+                out[i] = static_cast<std::complex<float>>(source[i]);
+            }
+            return MLXSHARP_STATUS_SUCCESS;
+        }
     }
 
     return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, kUnsupportedDType);
