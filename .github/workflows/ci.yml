@@ -250,52 +250,52 @@ jobs:
         if: always()
         run: |
           python - <<'PY'
-import os
-import xml.etree.ElementTree as ET
+          import os
+          import xml.etree.ElementTree as ET
 
-trx_path = "artifacts/test-results/TestResults.trx"
-summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          trx_path = "artifacts/test-results/TestResults.trx"
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
 
-if not os.path.exists(trx_path) or not summary_path:
-    print("No test results found to summarize.")
-    raise SystemExit(0)
+          if not os.path.exists(trx_path) or not summary_path:
+              print("No test results found to summarize.")
+              raise SystemExit(0)
 
-ns = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
-root = ET.parse(trx_path).getroot()
-counters = root.find(".//trx:ResultSummary/trx:Counters", ns)
+          ns = {"trx": "http://microsoft.com/schemas/VisualStudio/TeamTest/2010"}
+          root = ET.parse(trx_path).getroot()
+          counters = root.find(".//trx:ResultSummary/trx:Counters", ns)
 
-with open(summary_path, "a", encoding="utf-8") as summary:
-    summary.write("### Test Results\n\n")
+          with open(summary_path, "a", encoding="utf-8") as summary:
+              summary.write("### Test Results\n\n")
 
-    if counters is not None:
-        metrics = {
-            "Total": counters.attrib.get("total", "0"),
-            "Executed": counters.attrib.get("executed", "0"),
-            "Passed": counters.attrib.get("passed", "0"),
-            "Failed": counters.attrib.get("failed", "0"),
-            "Errors": counters.attrib.get("error", "0"),
-            "Timeouts": counters.attrib.get("timeout", "0"),
-            "Aborted": counters.attrib.get("aborted", "0"),
-            "Inconclusive": counters.attrib.get("inconclusive", "0"),
-            "Skipped": counters.attrib.get("notExecuted", "0")
-        }
+              if counters is not None:
+                  metrics = {
+                      "Total": counters.attrib.get("total", "0"),
+                      "Executed": counters.attrib.get("executed", "0"),
+                      "Passed": counters.attrib.get("passed", "0"),
+                      "Failed": counters.attrib.get("failed", "0"),
+                      "Errors": counters.attrib.get("error", "0"),
+                      "Timeouts": counters.attrib.get("timeout", "0"),
+                      "Aborted": counters.attrib.get("aborted", "0"),
+                      "Inconclusive": counters.attrib.get("inconclusive", "0"),
+                      "Skipped": counters.attrib.get("notExecuted", "0")
+                  }
 
-        for label, value in metrics.items():
-            if value and value != "0":
-                summary.write(f"- {label}: {value}\n")
-    else:
-        summary.write("- No counters were present in the TRX log.\n")
+                  for label, value in metrics.items():
+                      if value and value != "0":
+                          summary.write(f"- {label}: {value}\n")
+              else:
+                  summary.write("- No counters were present in the TRX log.\n")
 
-    failed_results = root.findall(".//trx:UnitTestResult[@outcome!='Passed']", ns)
-    if failed_results:
-        summary.write("\nFailed Tests:\n")
-        for result in failed_results:
-            test_name = result.attrib.get("testName", "(unknown test)")
-            outcome = result.attrib.get("outcome", "Unknown")
-            summary.write(f"- {test_name} ({outcome})\n")
+              failed_results = root.findall(".//trx:UnitTestResult[@outcome!='Passed']", ns)
+              if failed_results:
+                  summary.write("\nFailed Tests:\n")
+                  for result in failed_results:
+                      test_name = result.attrib.get("testName", "(unknown test)")
+                      outcome = result.attrib.get("outcome", "Unknown")
+                      summary.write(f"- {test_name} ({outcome})\n")
 
-    summary.write("\n")
-PY
+              summary.write("\n")
+          PY
 
   release:
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
