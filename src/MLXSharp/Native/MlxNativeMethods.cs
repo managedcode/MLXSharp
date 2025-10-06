@@ -39,6 +39,21 @@ internal static partial class MlxNativeMethods
     [LibraryImport(LibraryName, EntryPoint = "mlxsharp_free_buffer")]
     public static partial void FreeBuffer(nint bufferPointer);
 
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_session_load_model", StringMarshalling = StringMarshalling.Utf8)]
+    public static partial int SessionLoadModel(SafeMlxSessionHandle session, string modelDirectory, string tokenizerPath);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_session_generate_tokens")]
+    public static unsafe partial int SessionGenerateTokens(
+        SafeMlxSessionHandle session,
+        int* promptTokens,
+        nuint promptTokenCount,
+        ref MlxSharpGenerationOptions options,
+        out MlxSharpTokenBuffer outputTokens,
+        out MlxUsage usage);
+
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_release_tokens")]
+    public static partial void ReleaseTokens(ref MlxSharpTokenBuffer buffer);
+
     public static string GetLastErrorString()
     {
         Span<byte> initial = stackalloc byte[256];
@@ -141,4 +156,20 @@ internal struct MlxUsage
 {
     public int InputTokens;
     public int OutputTokens;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MlxSharpGenerationOptions
+{
+    public int MaxTokens;
+    public float Temperature;
+    public float TopP;
+    public int TopK;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MlxSharpTokenBuffer
+{
+    public nint Tokens;
+    public nuint Length;
 }

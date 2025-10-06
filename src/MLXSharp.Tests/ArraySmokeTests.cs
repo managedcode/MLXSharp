@@ -44,6 +44,7 @@ internal sealed class RequiresNativeLibraryFactAttribute : FactAttribute
 {
     public RequiresNativeLibraryFactAttribute()
     {
+        TestEnvironment.EnsureInitialized();
         if (!NativeLibraryLocator.TryEnsure(out var skipReason))
         {
             Skip = skipReason ?? "Native MLX library is not available.";

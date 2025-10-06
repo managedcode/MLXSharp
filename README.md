@@ -93,6 +93,7 @@ src/MLXSharp.Tests/          # Integration tests
    ```bash
    dotnet pack src/MLXSharp/MLXSharp.csproj \
        -p:MLXSharpMacNativeBinary=$PWD/native/build/macos/libmlxsharp.dylib \
+       -p:MLXSharpMacMetallibBinary=$PWD/native/build/macos/extern/mlx/mlx/backend/metal/kernels/mlx.metallib \
        -p:MLXSharpLinuxNativeBinary=$PWD/native/build/linux/libmlxsharp.so
    ```
 
@@ -104,13 +105,50 @@ The CMake project vendored from MLX builds MLX and the shim in one go. macOS bui
 3. `package-test` (macOS): downloads both native artifacts, stages them into `src/MLXSharp/runtimes/{rid}/native`, rebuilds, runs the integration tests, and produces NuGet packages.
 
 ## Testing
-Tests require a local MLX model bundle. Point `MLXSHARP_MODEL_PATH` to the directory before running:
+The managed integration tests still piggy-back on `mlx_lm` until the native runner is feature-complete. Bring your own HuggingFace bundle (any MLX-compatible repo) and point `MLXSHARP_MODEL_PATH` to it before running:
 
 ```bash
-export MLXSHARP_MODEL_PATH=$PWD/models/Qwen1.5-0.5B-Chat-4bit
-huggingface-cli download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir "$MLXSHARP_MODEL_PATH"
+export MLXSHARP_HF_MODEL_ID=<your-mlx-model>
+export MLXSHARP_MODEL_PATH=$PWD/models/<your-mlx-model>
+huggingface-cli download "$MLXSHARP_HF_MODEL_ID" --local-dir "$MLXSHARP_MODEL_PATH"
+python -m pip install mlx-lm
 dotnet test
 ```
+
+`MLXSHARP_HF_MODEL_ID` is picked up by the Python smoke test; omit it to fall back to `mlx-community/Qwen1.5-0.5B-Chat-4bit`.
+
+When running locally you can place prebuilt binaries under `libs/native-osx-arm64` (and/or `libs/native-libs`) and a corresponding model bundle under `model/`. The test harness auto-discovers these folders and configures `MLXSHARP_LIBRARY`, `MLXSHARP_MODEL_PATH`, and `MLXSHARP_TOKENIZER_PATH` so you can iterate completely offline.
+
+The integration suite invokes `python -m mlx_lm.generate` with deterministic settings (temperature `0`, seed `42`) and asserts that the generated response for prompts like “Скільки буде 2+2?” contains the correct answer. Test output includes the raw generation transcript so you can verify the model behaviour directly from the CI logs.
+
+### Native pipeline (experimental)
+
+Work is in progress to move inference fully into the native MLX backend. The current build exposes new configuration knobs via `MlxClientOptions`:
+
+| Option | Description |
+| --- | --- |
+| `EnableNativeModelRunner` | Turns on the experimental native transformer pipeline. Still returns “not implemented” until the native side is completed. |
+| `NativeModelDirectory` | Directory containing `config.json`, `*.safetensors`, etc. |
+| `TokenizerPath` | Path to the HuggingFace `tokenizer.json` (loaded with `Microsoft.ML.Tokenizers`). |
+| `MaxGeneratedTokens`, `Temperature`, `TopP`, `TopK` | Generation parameters that will flow into the native pipeline. |
+
+When the C++ implementation catches up you’ll be able to set the environment variables below and exercise the path end-to-end:
+
+```bash
+export MLXSHARP_TOKENIZER_PATH=$PWD/models/<model-name>/tokenizer.json
+export MLXSHARP_MODEL_PATH=$PWD/models/<model-name>
+```
+
+Until then, `EnableNativeModelRunner` should stay `false` to avoid runtime errors from the stub implementation.
+
+### MSBuild properties
+
+| Property | Purpose |
+| --- | --- |
+| `MLXSharpMacNativeBinary` | Path to `libmlxsharp.dylib` that gets packaged into the NuGet runtime folder. |
+| `MLXSharpMacMetallibBinary` | Path to the matching `mlx.metallib` that ships next to the dylib. |
+| `MLXSharpLinuxNativeBinary` | Path to the Linux shared object (`libmlxsharp.so`). |
+| `MLXSharpSkipMacNativeValidation` / `MLXSharpSkipLinuxNativeValidation` | Opt-out flags for validation logic when you intentionally omit platform binaries. |
 
 ## Versioning & platform support
 This initial release is focused on macOS developers who want MLX inside .NET applications. Linux binaries are produced to keep NuGet packages complete, and Windows support is not yet available.

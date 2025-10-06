@@ -17,6 +17,7 @@ add_subdirectory(${CMAKE_SOURCE_DIR}/../extern/mlx ${CMAKE_BINARY_DIR}/extern/ml
 
 add_library(mlxsharp SHARED
     src/mlxsharp.cpp
+    src/llm_model_runner.cpp
 )
 
 target_link_libraries(mlxsharp PRIVATE mlx)

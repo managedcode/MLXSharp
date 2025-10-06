@@ -137,6 +137,18 @@ typedef struct mlx_usage {
     int output_tokens;
 } mlx_usage;
 
+typedef struct mlxsharp_generation_options {
+    int max_tokens;
+    float temperature;
+    float top_p;
+    int top_k;
+} mlxsharp_generation_options;
+
+typedef struct mlxsharp_token_buffer {
+    int32_t* tokens;
+    size_t length;
+} mlxsharp_token_buffer;
+
 int mlxsharp_create_session(
     const char* chat_model_id,
     const char* embedding_model_id,
@@ -170,6 +182,21 @@ void mlxsharp_free_embedding(float* embedding);
 void mlxsharp_free_buffer(unsigned char* buffer);
 
 void mlxsharp_release_session(void* session);
+
+int mlxsharp_session_load_model(
+    void* session,
+    const char* model_directory,
+    const char* tokenizer_path);
+
+int mlxsharp_session_generate_tokens(
+    void* session,
+    const int32_t* prompt_tokens,
+    size_t prompt_token_count,
+    const mlxsharp_generation_options* options,
+    mlxsharp_token_buffer* output_tokens,
+    mlx_usage* usage);
+
+void mlxsharp_release_tokens(mlxsharp_token_buffer* buffer);
 
 #ifdef __cplusplus
 }
