@@ -20,18 +20,7 @@
 #include <mlx/stream.h>
 #include <mlx/transforms.h>
 
-namespace {
-
-thread_local std::string g_last_error;
-
-constexpr const char* kNullContext = "Context pointer is null.";
-constexpr const char* kNullArray = "Array pointer is null.";
-constexpr const char* kNullOutParameter = "Output parameter is null.";
-constexpr const char* kShapeMismatch = "Element count does not match provided shape.";
-constexpr const char* kNonContiguous = "Array data is not contiguous.";
-constexpr const char* kUnsupportedDType = "Unsupported dtype.";
-
-struct mlxsharp_context final {
+struct mlxsharp_context {
     std::atomic<int32_t> ref_count{1};
     mlx::core::Device device;
 
@@ -39,7 +28,7 @@ struct mlxsharp_context final {
         : device(d) {}
 };
 
-struct mlxsharp_array final {
+struct mlxsharp_array {
     std::atomic<int32_t> ref_count{1};
     mlx::core::array value;
 
@@ -47,7 +36,7 @@ struct mlxsharp_array final {
         : value(std::move(v)) {}
 };
 
-struct mlxsharp_session final {
+struct mlxsharp_session {
     std::atomic<int32_t> ref_count{1};
     mlxsharp_context_t* context;
     std::string chat_model;
@@ -60,6 +49,17 @@ struct mlxsharp_session final {
           embedding_model(std::move(embed)),
           image_model(std::move(image)) {}
 };
+
+namespace {
+
+thread_local std::string g_last_error;
+
+constexpr const char* kNullContext = "Context pointer is null.";
+constexpr const char* kNullArray = "Array pointer is null.";
+constexpr const char* kNullOutParameter = "Output parameter is null.";
+constexpr const char* kShapeMismatch = "Element count does not match provided shape.";
+constexpr const char* kNonContiguous = "Array data is not contiguous.";
+constexpr const char* kUnsupportedDType = "Unsupported dtype.";
 
 static void assign_usage(mlx_usage* usage, int input_tokens, int output_tokens)
 {
