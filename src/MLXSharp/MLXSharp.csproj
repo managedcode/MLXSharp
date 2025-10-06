@@ -20,6 +20,8 @@
     <MLXSharpMacNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','osx-arm64','native','libmlxsharp.dylib'))</MLXSharpMacNativeDestination>
     <MLXSharpSkipMacNativeValidation Condition="'$(MLXSharpSkipMacNativeValidation)' == ''">false</MLXSharpSkipMacNativeValidation>
     <MLXSharpMacNativeDestinationDir>$([System.IO.Path]::GetDirectoryName('$(MLXSharpMacNativeDestination)'))</MLXSharpMacNativeDestinationDir>
+    <MLXSharpMacMetallibBinary Condition="'$(MLXSharpMacMetallibBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','macos','extern','mlx','mlx','backend','metal','kernels','mlx.metallib'))</MLXSharpMacMetallibBinary>
+    <MLXSharpMacMetallibDestination Condition="'$(MLXSharpMacMetallibDestination)' == ''">$([System.IO.Path]::Combine('$(MLXSharpMacNativeDestinationDir)','mlx.metallib'))</MLXSharpMacMetallibDestination>
 
     <MLXSharpLinuxNativeBinary Condition="'$(MLXSharpLinuxNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','linux','libmlxsharp.so'))</MLXSharpLinuxNativeBinary>
     <MLXSharpLinuxNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','linux-x64','native','libmlxsharp.so'))</MLXSharpLinuxNativeDestination>
@@ -33,6 +35,8 @@
     <ItemGroup>
       <_MacNativeSource Include="$(MLXSharpMacNativeBinary)"
                         Condition="Exists('$(MLXSharpMacNativeBinary)')" />
+      <_MacMetallibSource Include="$(MLXSharpMacMetallibBinary)"
+                          Condition="Exists('$(MLXSharpMacMetallibBinary)')" />
     </ItemGroup>
 
     <MakeDir Directories="$(MLXSharpMacNativeDestinationDir)"
@@ -42,6 +46,10 @@
           DestinationFiles="$(MLXSharpMacNativeDestination)"
           SkipUnchangedFiles="true"
           Condition="'@(_MacNativeSource)' != ''" />
+    <Copy SourceFiles="@(_MacMetallibSource)"
+          DestinationFiles="$(MLXSharpMacMetallibDestination)"
+          SkipUnchangedFiles="true"
+          Condition="'@(_MacMetallibSource)' != ''" />
 
     <ItemGroup>
       <None Include="$(MLXSharpMacNativeDestination)"
@@ -51,10 +59,19 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         <Link>runtimes\osx-arm64\native\%(Filename)%(Extension)</Link>
       </None>
+      <None Include="$(MLXSharpMacMetallibDestination)"
+            Condition="Exists('$(MLXSharpMacMetallibDestination)')">
+        <Pack>true</Pack>
+        <PackagePath>runtimes/osx-arm64/native/%(Filename)%(Extension)</PackagePath>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        <Link>runtimes\osx-arm64\native\%(Filename)%(Extension)</Link>
+      </None>
     </ItemGroup>
 
     <Error Condition="'$(MLXSharpSkipMacNativeValidation)' != 'true' and !Exists('$(MLXSharpMacNativeDestination)')"
            Text="libmlxsharp.dylib is missing. Build the native library or supply MLXSharpMacNativeBinary before packing." />
+    <Error Condition="'$(MLXSharpSkipMacNativeValidation)' != 'true' and !Exists('$(MLXSharpMacMetallibDestination)')"
+           Text="mlx.metallib is missing. Build the native library or supply MLXSharpMacMetallibBinary before packing." />
   </Target>
 
   <Target Name="EnsureLinuxNativeBinary"

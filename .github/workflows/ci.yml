@@ -78,6 +78,7 @@ jobs:
         run: |
           mkdir -p artifacts/native/osx-arm64
           cp native/build/macos/libmlxsharp.dylib artifacts/native/osx-arm64/
+          cp native/build/macos/extern/mlx/mlx/backend/metal/kernels/mlx.metallib artifacts/native/osx-arm64/
 
       - name: Upload native artifact
         uses: actions/upload-artifact@v4
@@ -141,6 +142,7 @@ jobs:
         run: |
           mkdir -p src/MLXSharp/runtimes/osx-arm64/native
           cp artifacts/native/osx-arm64/libmlxsharp.dylib src/MLXSharp/runtimes/osx-arm64/native/
+          cp artifacts/native/osx-arm64/mlx.metallib src/MLXSharp/runtimes/osx-arm64/native/
           mkdir -p src/MLXSharp/runtimes/linux-x64/native
           cp artifacts/native/linux-x64/libmlxsharp.so src/MLXSharp/runtimes/linux-x64/native/
 
@@ -152,6 +154,7 @@ jobs:
           TEST_OUTPUT="src/MLXSharp.Tests/bin/Release/net9.0"
           mkdir -p "$TEST_OUTPUT/runtimes/osx-arm64/native"
           cp src/MLXSharp/runtimes/osx-arm64/native/libmlxsharp.dylib "$TEST_OUTPUT/runtimes/osx-arm64/native/"
+          cp src/MLXSharp/runtimes/osx-arm64/native/mlx.metallib "$TEST_OUTPUT/runtimes/osx-arm64/native/"
           ls -la "$TEST_OUTPUT/runtimes/osx-arm64/native/"
 
       - name: Run tests
@@ -171,13 +174,14 @@ jobs:
           mkdir -p artifacts/packages
           mkdir -p artifacts/native
           cp artifacts/native/osx-arm64/libmlxsharp.dylib artifacts/native/
+          cp artifacts/native/osx-arm64/mlx.metallib artifacts/native/
           cp artifacts/native/linux-x64/libmlxsharp.so artifacts/native/
 
       - name: Pack MLXSharp library
-        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --output artifacts/packages -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/libmlxsharp.dylib -p:MLXSharpLinuxNativeBinary=$GITHUB_WORKSPACE/artifacts/native/linux-x64/libmlxsharp.so
+        run: dotnet pack src/MLXSharp/MLXSharp.csproj --configuration Release --output artifacts/packages -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/libmlxsharp.dylib -p:MLXSharpMacMetallibBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/mlx.metallib -p:MLXSharpLinuxNativeBinary=$GITHUB_WORKSPACE/artifacts/native/linux-x64/libmlxsharp.so
 
       - name: Pack MLXSharp.SemanticKernel library
-        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --output artifacts/packages -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/libmlxsharp.dylib -p:MLXSharpLinuxNativeBinary=$GITHUB_WORKSPACE/artifacts/native/linux-x64/libmlxsharp.so -p:MLXSharpSkipLinuxNativeValidation=true
+        run: dotnet pack src/MLXSharp.SemanticKernel/MLXSharp.SemanticKernel.csproj --configuration Release --output artifacts/packages -p:MLXSharpMacNativeBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/libmlxsharp.dylib -p:MLXSharpMacMetallibBinary=$GITHUB_WORKSPACE/artifacts/native/osx-arm64/mlx.metallib -p:MLXSharpLinuxNativeBinary=$GITHUB_WORKSPACE/artifacts/native/linux-x64/libmlxsharp.so -p:MLXSharpSkipLinuxNativeValidation=true
 
       - name: Verify package contains native libraries
         run: |
@@ -203,6 +207,12 @@ jobs:
                   echo "  ✓ macOS library present"
                 else
                   echo "  ✗ macOS library missing"
+                  package_missing=1
+                fi
+                if unzip -l "${package}" | grep -q "runtimes/osx-arm64/native/mlx.metallib"; then
+                  echo "  ✓ macOS metallib present"
+                else
+                  echo "  ✗ macOS metallib missing"
                   package_missing=1
                 fi
                 if unzip -l "${package}" | grep -q "runtimes/linux-x64/native/libmlxsharp.so"; then
