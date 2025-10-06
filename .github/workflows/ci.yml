@@ -84,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-osx-arm64
-          path: artifacts/native/osx-arm64/libmlxsharp.dylib
+          path: artifacts/native/osx-arm64
 
   package-test:
     needs:
