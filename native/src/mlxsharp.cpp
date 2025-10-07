@@ -1,5 +1,4 @@
 #include "mlxsharp/api.h"
-#include "mlxsharp/llm_model_runner.h"
 
 #include <algorithm>
 #include <atomic>
@@ -44,8 +43,6 @@ struct mlxsharp_session {
     std::string chat_model;
     std::string embedding_model;
     std::string image_model;
-    std::unique_ptr<mlxsharp::llm::ModelRunner> model_runner;
-
     mlxsharp_session(mlxsharp_context_t* ctx, std::string chat, std::string embed, std::string image)
         : context(ctx),
           chat_model(std::move(chat)),
@@ -563,104 +560,6 @@ void mlxsharp_free_embedding(float* embedding) {
 
 void mlxsharp_free_buffer(unsigned char* data) {
     std::free(data);
-}
-
-int mlxsharp_session_load_model(
-    void* session_ptr,
-    const char* model_directory,
-    const char* tokenizer_path) {
-    if (session_ptr == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Session pointer is null.");
-    }
-
-    if (model_directory == nullptr || tokenizer_path == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Model directory or tokenizer path is null.");
-    }
-
-    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
-
-    return invoke([&]() -> int {
-        auto model = mlxsharp::llm::ModelRunner::Create(model_directory, tokenizer_path);
-        session->model_runner = std::move(model);
-        return MLXSHARP_STATUS_SUCCESS;
-    });
-}
-
-int mlxsharp_session_generate_tokens(
-    void* session_ptr,
-    const int32_t* prompt_tokens,
-    size_t prompt_token_count,
-    const mlxsharp_generation_options* options,
-    mlxsharp_token_buffer* output_tokens,
-    mlx_usage* usage) {
-    if (session_ptr == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Session pointer is null.");
-    }
-
-    if (output_tokens == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, kNullOutParameter);
-    }
-
-    output_tokens->tokens = nullptr;
-    output_tokens->length = 0;
-
-    auto* session = static_cast<mlxsharp_session_t*>(session_ptr);
-
-    if (session->model_runner == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Model is not loaded. Call mlxsharp_session_load_model first.");
-    }
-
-    if (prompt_token_count > 0 && prompt_tokens == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Prompt tokens pointer is null.");
-    }
-
-    if (options == nullptr) {
-        return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Generation options pointer is null.");
-    }
-
-    return invoke([&]() -> int {
-        std::vector<int32_t> prompt;
-        prompt.reserve(prompt_token_count);
-        for (size_t i = 0; i < prompt_token_count; ++i) {
-            prompt.push_back(prompt_tokens[i]);
-        }
-
-        mlxsharp::llm::GenerationOptions native_options{
-            options->max_tokens,
-            options->temperature,
-            options->top_p,
-            options->top_k,
-        };
-
-        auto generated = session->model_runner->Generate(prompt, native_options);
-        output_tokens->length = generated.size();
-
-        if (generated.empty()) {
-            assign_usage(usage, static_cast<int>(prompt_token_count), 0);
-            return MLXSHARP_STATUS_SUCCESS;
-        }
-
-        auto* buffer = static_cast<int32_t*>(std::malloc(generated.size() * sizeof(int32_t)));
-        if (buffer == nullptr) {
-            return set_error(MLXSHARP_STATUS_OUT_OF_MEMORY, "Failed to allocate output token buffer.");
-        }
-
-        std::memcpy(buffer, generated.data(), generated.size() * sizeof(int32_t));
-        output_tokens->tokens = buffer;
-
-        assign_usage(usage, static_cast<int>(prompt_token_count), static_cast<int>(generated.size()));
-        return MLXSHARP_STATUS_SUCCESS;
-    });
-}
-
-void mlxsharp_release_tokens(mlxsharp_token_buffer* buffer) {
-    if (buffer == nullptr || buffer->tokens == nullptr) {
-        return;
-    }
-
-    std::free(buffer->tokens);
-    buffer->tokens = nullptr;
-    buffer->length = 0;
 }
 
 void mlxsharp_release_session(void* session_ptr) {

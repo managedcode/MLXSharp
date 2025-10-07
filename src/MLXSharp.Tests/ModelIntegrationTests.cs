@@ -5,7 +5,6 @@ using Microsoft.Extensions.AI;
 using MLXSharp;
 using MLXSharp.Backends;
 using Xunit;
-using Xunit.Sdk;
 
 namespace MLXSharp.Tests;
 
@@ -24,7 +23,7 @@ public sealed class ModelIntegrationTests
             new[] { new ChatMessage(ChatRole.User, "Скільки буде 2+2?") },
             new ChatOptions { Temperature = 0 });
 
-        var result = await backend.GenerateTextAsync(request, CancellationToken.None).ConfigureAwait(false);
+        var result = await backend.GenerateTextAsync(request, CancellationToken.None);
 
         Assert.False(string.IsNullOrWhiteSpace(result.Text));
         Assert.Contains("4", result.Text);
@@ -39,6 +38,24 @@ public sealed class ModelIntegrationTests
             EnableNativeModelRunner = false,
         };
 
+        var modelId = Environment.GetEnvironmentVariable("MLXSHARP_HF_MODEL_ID");
+        if (!string.IsNullOrWhiteSpace(modelId))
+        {
+            options.ChatModelId = modelId;
+        }
+
+        var modelDirectory = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
+        if (!string.IsNullOrWhiteSpace(modelDirectory))
+        {
+            options.NativeModelDirectory = modelDirectory;
+        }
+
+        var tokenizerPath = Environment.GetEnvironmentVariable("MLXSHARP_TOKENIZER_PATH");
+        if (!string.IsNullOrWhiteSpace(tokenizerPath))
+        {
+            options.TokenizerPath = tokenizerPath;
+        }
+
         return options;
     }
 
@@ -47,13 +64,13 @@ public sealed class ModelIntegrationTests
         var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
         if (string.IsNullOrWhiteSpace(modelPath) || !System.IO.Directory.Exists(modelPath))
         {
-            throw new SkipException("Native model bundle not found.");
+            Skip.If(true, "Native model bundle not found.");
         }
 
         var library = Environment.GetEnvironmentVariable("MLXSHARP_LIBRARY");
         if (string.IsNullOrWhiteSpace(library) || !System.IO.File.Exists(library))
         {
-            throw new SkipException("Native libmlxsharp library not configured.");
+            Skip.If(true, "Native libmlxsharp library not configured.");
         }
     }
 }

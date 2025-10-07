@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
 using MLXSharp.Native;
-using MLXSharp.Tokenization;
 
 namespace MLXSharp.Backends;
 
@@ -15,16 +14,12 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
 {
     private readonly MlxClientOptions _options;
     private readonly SafeMlxSessionHandle _session;
-    private readonly MlxTokenizer? _tokenizer;
-    private readonly bool _nativePipelineReady;
     private bool _disposed;
 
-    private MlxNativeBackend(SafeMlxSessionHandle session, MlxClientOptions options, MlxTokenizer? tokenizer, bool nativePipelineReady)
+    private MlxNativeBackend(SafeMlxSessionHandle session, MlxClientOptions options)
     {
         _session = session;
         _options = options;
-        _tokenizer = tokenizer;
-        _nativePipelineReady = nativePipelineReady;
     }
 
     public static MlxNativeBackend Create(MlxClientOptions options)
@@ -39,27 +34,13 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
             throw new InvalidOperationException($"Failed to create MLX session. Native status: {status}.");
         }
 
-        try
-        {
-            var (tokenizer, nativeReady) = InitializeNativePipeline(session, options);
-            return new MlxNativeBackend(session, options, tokenizer, nativeReady);
-        }
-        catch
-        {
-            session.Dispose();
-            throw;
-        }
+        return new MlxNativeBackend(session, options);
     }
 
     public Task<MlxTextResult> GenerateTextAsync(MlxTextRequest request, CancellationToken cancellationToken)
     {
         ThrowIfDisposed();
         ArgumentNullException.ThrowIfNull(request);
-
-        if (_nativePipelineReady && _tokenizer is not null)
-        {
-            return Task.FromResult(GenerateTextNative(request));
-        }
 
         return Task.FromResult(GenerateTextFallback(request));
     }
@@ -190,48 +171,6 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
         };
     }
 
-    private static (MlxTokenizer? Tokenizer, bool NativeReady) InitializeNativePipeline(SafeMlxSessionHandle session, MlxClientOptions options)
-    {
-        if (options is null || !options.EnableNativeModelRunner)
-        {
-            return (null, false);
-        }
-
-        if (string.IsNullOrWhiteSpace(options.NativeModelDirectory))
-        {
-            throw new InvalidOperationException("Native model runner is enabled but NativeModelDirectory was not provided.");
-        }
-
-        if (string.IsNullOrWhiteSpace(options.TokenizerPath))
-        {
-            throw new InvalidOperationException("Native model runner is enabled but TokenizerPath was not provided.");
-        }
-
-        var tokenizer = MlxTokenizer.Load(options.TokenizerPath);
-
-        try
-        {
-            var status = MlxNativeMethods.SessionLoadModel(session, options.NativeModelDirectory, tokenizer.TokenizerPath);
-            if (status != 0)
-            {
-                var message = MlxNativeMethods.GetLastErrorString();
-                throw new InvalidOperationException($"Failed to load native model ({status}). {message}");
-            }
-
-            return (tokenizer, true);
-        }
-        catch (EntryPointNotFoundException)
-        {
-            // Older native builds do not expose the explicit load/generate entry points. Fall back to
-            // the legacy GenerateText code path.
-            return (null, false);
-        }
-        catch (DllNotFoundException)
-        {
-            return (null, false);
-        }
-    }
-
     private MlxTextResult GenerateTextFallback(MlxTextRequest request)
     {
         var prompt = BuildPrompt(request.Messages);
@@ -247,68 +186,6 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
             var text = responseHandle.GetString();
             var usageDetails = CreateUsage(usage);
             return new MlxTextResult(text, usageDetails, _options.ChatModelId);
-        }
-    }
-
-    private MlxTextResult GenerateTextNative(MlxTextRequest request)
-    {
-        if (_tokenizer is null)
-        {
-            return GenerateTextFallback(request);
-        }
-
-        var prompt = BuildPrompt(request.Messages);
-        var encoding = _tokenizer.Encode(prompt);
-
-        unsafe
-        {
-            fixed (int* pInput = encoding.Tokens)
-            {
-                var options = new MlxSharpGenerationOptions
-                {
-                    MaxTokens = _options.MaxGeneratedTokens,
-                    Temperature = _options.Temperature,
-                    TopP = _options.TopP,
-                    TopK = _options.TopK,
-                };
-
-                var status = MlxNativeMethods.SessionGenerateTokens(
-                    _session,
-                    pInput,
-                    (nuint)encoding.Tokens.Length,
-                    ref options,
-                    out var tokenBuffer,
-                    out var usage);
-
-                if (status != 0)
-                {
-                    MlxNativeMethods.ReleaseTokens(ref tokenBuffer);
-                    var message = MlxNativeMethods.GetLastErrorString();
-                    throw new InvalidOperationException($"mlxsharp_session_generate_tokens failed with status {status}. {message}");
-                }
-
-                try
-                {
-                    if (tokenBuffer.Tokens == nint.Zero || tokenBuffer.Length == 0)
-                    {
-                        return new MlxTextResult(string.Empty, CreateUsage(usage), _options.ChatModelId);
-                    }
-
-                    var length = checked((int)tokenBuffer.Length);
-                    var managed = new int[length];
-                    var source = (int*)tokenBuffer.Tokens;
-                    var span = new Span<int>(source, length);
-                    span.CopyTo(managed);
-
-                    var text = _tokenizer.Decode(managed);
-                    var usageDetails = CreateUsage(usage);
-                    return new MlxTextResult(text, usageDetails, _options.ChatModelId);
-                }
-                finally
-                {
-                    MlxNativeMethods.ReleaseTokens(ref tokenBuffer);
-                }
-            }
         }
     }
 
