@@ -217,6 +217,22 @@ jobs:
 
           search_dirs: list[pathlib.Path] = []
           package_dir: Optional[pathlib.Path] = None
+          package_paths: list[pathlib.Path] = []
+
+          package_file = getattr(mlx, "__file__", None)
+          if package_file:
+              try:
+                  package_paths.append(pathlib.Path(package_file).resolve().parent)
+              except (TypeError, OSError):
+                  pass
+
+          package_path_attr = getattr(mlx, "__path__", None)
+          if package_path_attr:
+              for entry in package_path_attr:
+                  try:
+                      package_paths.append(pathlib.Path(entry).resolve())
+                  except (TypeError, OSError):
+                      continue
 
           try:
               spec = importlib.util.find_spec("mlx.backend.metal.kernels")
@@ -227,31 +243,56 @@ jobs:
               candidate = pathlib.Path(spec.origin).resolve().parent
               if candidate.exists():
                   search_dirs.append(candidate)
+                  package_paths.append(candidate)
 
-          try:
-              resource = resources.files("mlx.backend.metal") / "kernels"
-          except (ModuleNotFoundError, AttributeError):
-              resource = None
-          else:
+          def append_resource_directory(module: str, *subpath: str) -> None:
               try:
-                  with resources.as_file(resource) as extracted:
+                  traversable = resources.files(module)
+              except (ModuleNotFoundError, AttributeError):
+                  return
+
+              for segment in subpath:
+                  traversable = traversable / segment
+
+              try:
+                  with resources.as_file(traversable) as extracted:
                       if extracted:
                           extracted_path = pathlib.Path(extracted).resolve()
                           if extracted_path.exists():
                               search_dirs.append(extracted_path)
+                              package_paths.append(extracted_path)
               except (FileNotFoundError, RuntimeError):
                   pass
 
-          package_file = getattr(mlx, "__file__", None)
-          if package_file:
-              package_dir = pathlib.Path(package_file).resolve().parent
-              search_dirs.extend(
-                  [
-                      package_dir / "backend" / "metal" / "kernels",
-                      package_dir / "backend" / "metal",
-                      package_dir,
-                  ]
-              )
+          append_resource_directory("mlx.backend.metal", "kernels")
+          append_resource_directory("mlx")
+
+          existing_package_paths: list[pathlib.Path] = []
+          seen_package_paths: set[pathlib.Path] = set()
+          for path in package_paths:
+              if not path:
+                  continue
+              try:
+                  resolved = path.resolve()
+              except (OSError, RuntimeError):
+                  continue
+              if not resolved.exists():
+                  continue
+              if resolved in seen_package_paths:
+                  continue
+              seen_package_paths.add(resolved)
+              existing_package_paths.append(resolved)
+
+          if existing_package_paths:
+              package_dir = existing_package_paths[0]
+              for root in existing_package_paths:
+                  search_dirs.extend(
+                      [
+                          root / "backend" / "metal" / "kernels",
+                          root / "backend" / "metal",
+                          root,
+                      ]
+                  )
 
           ordered_dirs: list[pathlib.Path] = []
           seen: set[pathlib.Path] = set()
@@ -277,17 +318,25 @@ jobs:
 
           src = next(iter_metallibs(ordered_dirs), None)
 
-          if src is None and package_dir and package_dir.exists():
-              for candidate in package_dir.rglob("mlx.metallib"):
-                  src = candidate
-                  print(f"::warning::Resolved metallib via recursive search under {package_dir}")
-                  break
+          package_roots = existing_package_paths if existing_package_paths else ([] if not package_dir else [package_dir])
 
-          if src is None and package_dir and package_dir.exists():
-              for candidate in sorted(package_dir.rglob("*.metallib")):
-                  src = candidate
-                  print(f"::warning::Using metallib {candidate.name} discovered via package-wide search")
-                  break
+          if src is None:
+              for root in package_roots:
+                  for candidate in root.rglob("mlx.metallib"):
+                      src = candidate
+                      print(f"::warning::Resolved metallib via recursive search under {root}")
+                      break
+                  if src is not None:
+                      break
+
+          if src is None:
+              for root in package_roots:
+                  for candidate in sorted(root.rglob("*.metallib")):
+                      src = candidate
+                      print(f"::warning::Using metallib {candidate.name} discovered via package-wide search in {root}")
+                      break
+                  if src is not None:
+                      break
 
           if src is None:
               print("::error::Could not locate any mlx.metallib artifacts within the installed mlx package.")
