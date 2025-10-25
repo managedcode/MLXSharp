@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.AI;
@@ -10,11 +11,10 @@ namespace MLXSharp.Tests;
 
 public sealed class ModelIntegrationTests
 {
-    [Fact]
+    [RequiresNativeModelFact]
     public async Task NativeBackendAnswersSimpleMathAsync()
     {
         TestEnvironment.EnsureInitialized();
-        EnsureAssets();
 
         var options = CreateOptions();
         using var backend = MlxNativeBackend.Create(options);
@@ -59,14 +59,44 @@ public sealed class ModelIntegrationTests
         return options;
     }
 
-    private static void EnsureAssets()
+}
+
+internal sealed class RequiresNativeModelFactAttribute : FactAttribute
+{
+    public RequiresNativeModelFactAttribute()
     {
+        TestEnvironment.EnsureInitialized();
+
+        if (!NativeLibraryLocator.TryEnsure(out var skipReason))
+        {
+            Skip = skipReason ?? "Native MLX library is not available.";
+            return;
+        }
+
         var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
-        Assert.False(string.IsNullOrWhiteSpace(modelPath), "Native model bundle path is not configured. Set MLXSHARP_MODEL_PATH to a valid directory.");
-        Assert.True(System.IO.Directory.Exists(modelPath), $"Native model bundle not found at '{modelPath}'.");
+        if (string.IsNullOrWhiteSpace(modelPath))
+        {
+            Skip = "Native model bundle path is not configured. Set MLXSHARP_MODEL_PATH to a valid directory.";
+            return;
+        }
+
+        if (!Directory.Exists(modelPath))
+        {
+            Skip = $"Native model bundle not found at '{modelPath}'.";
+            return;
+        }
 
         var library = Environment.GetEnvironmentVariable("MLXSHARP_LIBRARY");
-        Assert.False(string.IsNullOrWhiteSpace(library), "Native libmlxsharp library is not configured. Set MLXSHARP_LIBRARY to the staged native library that ships with the official MLXSharp release.");
-        Assert.True(System.IO.File.Exists(library), $"Native libmlxsharp library not found at '{library}'.");
+        if (string.IsNullOrWhiteSpace(library) || !File.Exists(library))
+        {
+            Skip = "Native libmlxsharp library is not configured. Set MLXSHARP_LIBRARY to the staged native library that ships with the official MLXSharp release.";
+            return;
+        }
+
+        var tokenizerPath = Environment.GetEnvironmentVariable("MLXSHARP_TOKENIZER_PATH");
+        if (!string.IsNullOrWhiteSpace(tokenizerPath) && !File.Exists(tokenizerPath))
+        {
+            Skip = $"Native tokenizer file not found at '{tokenizerPath}'.";
+        }
     }
 }
