@@ -101,8 +101,8 @@ The CMake project vendored from MLX builds MLX and the shim in one go. macOS bui
 
 ## CI overview
 1. `dotnet-build` (Ubuntu): restores the solution and compiles managed projects.
-2. `native-linux` / `native-macos`: compile `libmlxsharp.so` and `libmlxsharp.dylib` in parallel.
-3. `package-test` (macOS): downloads both native artifacts, stages them into `src/MLXSharp/runtimes/{rid}/native`, rebuilds, runs the integration tests, and produces NuGet packages.
+2. `native-assets` (Ubuntu): downloads the signed native binaries published with the latest MLXSharp release and uploads them as workflow artifacts.
+3. `package-test` (macOS): pulls down the staged native artifacts, copies them into `src/MLXSharp/runtimes/{rid}/native`, rebuilds, runs the integration tests, and produces NuGet packages.
 
 ## Testing
 The managed integration tests still piggy-back on `mlx_lm` until the native runner is feature-complete. Bring your own HuggingFace bundle (any MLX-compatible repo) and point `MLXSHARP_MODEL_PATH` to it before running:
@@ -117,7 +117,7 @@ dotnet test
 
 `MLXSHARP_HF_MODEL_ID` is picked up by the Python smoke test; omit it to fall back to `mlx-community/Qwen1.5-0.5B-Chat-4bit`.
 
-When running locally you can place prebuilt binaries under `libs/native-osx-arm64` (and/or `libs/native-libs`) and a corresponding model bundle under `model/`. The test harness auto-discovers these folders and configures `MLXSHARP_LIBRARY`, `MLXSHARP_MODEL_PATH`, and `MLXSHARP_TOKENIZER_PATH` so you can iterate completely offline. If no native binary is present the tests now download the latest signed `ManagedCode.MLXSharp` NuGet package and stage its `runtimes/{rid}/native/libmlxsharp.{dylib|so}` assets under `libs/native-libs/` automatically.
+When running locally you can place prebuilt binaries under `libs/native-osx-arm64` (and/or `libs/native-libs`) and a corresponding model bundle under `model/`. The test harness auto-discovers these folders and configures `MLXSHARP_LIBRARY`, `MLXSHARP_MODEL_PATH`, and `MLXSHARP_TOKENIZER_PATH` so you can iterate completely offline.
 
 The integration suite invokes `python -m mlx_lm.generate` with deterministic settings (temperature `0`, seed `42`) and asserts that the generated response for prompts like “Скільки буде 2+2?” contains the correct answer. Test output includes the raw generation transcript so you can verify the model behaviour directly from the CI logs.
 

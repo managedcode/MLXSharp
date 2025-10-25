@@ -25,17 +25,6 @@ internal static class TestEnvironment
 
     private static void ConfigureNativeLibrary(string repoRoot)
     {
-        if (NativeBinaryManager.TryEnsureNativeLibrary(repoRoot, out var officialLibrary, out var downloadError) && officialLibrary is not null)
-        {
-            ApplyNativeLibrary(officialLibrary);
-            return;
-        }
-
-        if (!string.IsNullOrWhiteSpace(downloadError))
-        {
-            Console.Error.WriteLine($"Failed to download official MLXSharp native library: {downloadError}");
-        }
-
         var existing = Environment.GetEnvironmentVariable("MLXSHARP_LIBRARY");
         if (!string.IsNullOrWhiteSpace(existing) && File.Exists(existing))
         {
