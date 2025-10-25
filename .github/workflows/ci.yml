@@ -202,6 +202,8 @@ jobs:
 
           echo "::warning::mlx.metallib missing from native artifact; attempting to source from installed mlx package"
           python - <<'PY'
+          import importlib.util
+          from importlib import resources
           import pathlib
           import shutil
           import sys
@@ -212,9 +214,30 @@ jobs:
               print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
               sys.exit(1)
 
-          kernels_dir = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels"
-          if not kernels_dir.exists():
-              print(f"::error::Could not find MLX metal kernels directory at {kernels_dir}")
+          kernels_dir = None
+
+          spec = importlib.util.find_spec("mlx.backend.metal.kernels")
+          if spec and spec.origin:
+              candidate = pathlib.Path(spec.origin).resolve().parent
+              if candidate.exists():
+                  kernels_dir = candidate
+
+          if kernels_dir is None:
+              try:
+                  resource = resources.files("mlx.backend.metal") / "kernels"
+              except (ModuleNotFoundError, AttributeError):
+                  resource = None
+              if resource is not None:
+                  try:
+                      with resources.as_file(resource) as extracted:
+                          extracted_path = pathlib.Path(extracted)
+                          if extracted_path.exists():
+                              kernels_dir = extracted_path
+                  except FileNotFoundError:
+                      pass
+
+          if kernels_dir is None or not kernels_dir.exists():
+              print("::error::Could not locate the MLX metal kernels directory; checked module spec and importlib resources.")
               sys.exit(1)
 
           preferred = kernels_dir / "mlx.metallib"
