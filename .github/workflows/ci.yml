@@ -149,12 +149,32 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        run: python -m pip install huggingface_hub mlx-lm
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install huggingface_hub mlx mlx-lm
 
       - name: Download test model from HuggingFace
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p models
-          huggingface-cli download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from huggingface_hub import snapshot_download
+
+          target_dir = Path("models/Qwen1.5-0.5B-Chat-4bit")
+          target_dir.mkdir(parents=True, exist_ok=True)
+
+          snapshot_download(
+              repo_id="mlx-community/Qwen1.5-0.5B-Chat-4bit",
+              local_dir=str(target_dir),
+              local_dir_use_symlinks=False,
+              token=os.environ.get("HF_TOKEN") or None,
+              resume_download=True,
+          )
+          PY
           echo "Model files:"
           ls -la models/Qwen1.5-0.5B-Chat-4bit/
 
@@ -169,6 +189,168 @@ jobs:
         with:
           name: native-linux-x64
           path: artifacts/native/linux-x64
+
+      - name: Ensure macOS metallib is available
+        run: |
+          set -euo pipefail
+
+          metallib_path="artifacts/native/osx-arm64/mlx.metallib"
+          if [ -f "${metallib_path}" ]; then
+            echo "Found mlx.metallib in downloaded native artifact."
+            exit 0
+          fi
+
+          echo "::warning::mlx.metallib missing from native artifact; attempting to source from installed mlx package"
+          python - <<'PY'
+          import importlib.util
+          from importlib import resources
+          import pathlib
+          import shutil
+          import sys
+          from typing import Iterable, Optional
+
+          try:
+              import mlx  # type: ignore
+          except ImportError:
+              print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
+              sys.exit(1)
+
+          search_dirs: list[pathlib.Path] = []
+          package_dir: Optional[pathlib.Path] = None
+          package_paths: list[pathlib.Path] = []
+
+          package_file = getattr(mlx, "__file__", None)
+          if package_file:
+              try:
+                  package_paths.append(pathlib.Path(package_file).resolve().parent)
+              except (TypeError, OSError):
+                  pass
+
+          package_path_attr = getattr(mlx, "__path__", None)
+          if package_path_attr:
+              for entry in package_path_attr:
+                  try:
+                      package_paths.append(pathlib.Path(entry).resolve())
+                  except (TypeError, OSError):
+                      continue
+
+          try:
+              spec = importlib.util.find_spec("mlx.backend.metal.kernels")
+          except ModuleNotFoundError:
+              spec = None
+
+          if spec and spec.origin:
+              candidate = pathlib.Path(spec.origin).resolve().parent
+              if candidate.exists():
+                  search_dirs.append(candidate)
+                  package_paths.append(candidate)
+
+          def append_resource_directory(module: str, *subpath: str) -> None:
+              try:
+                  traversable = resources.files(module)
+              except (ModuleNotFoundError, AttributeError):
+                  return
+
+              for segment in subpath:
+                  traversable = traversable / segment
+
+              try:
+                  with resources.as_file(traversable) as extracted:
+                      if extracted:
+                          extracted_path = pathlib.Path(extracted).resolve()
+                          if extracted_path.exists():
+                              search_dirs.append(extracted_path)
+                              package_paths.append(extracted_path)
+              except (FileNotFoundError, RuntimeError):
+                  pass
+
+          append_resource_directory("mlx.backend.metal", "kernels")
+          append_resource_directory("mlx")
+
+          existing_package_paths: list[pathlib.Path] = []
+          seen_package_paths: set[pathlib.Path] = set()
+          for path in package_paths:
+              if not path:
+                  continue
+              try:
+                  resolved = path.resolve()
+              except (OSError, RuntimeError):
+                  continue
+              if not resolved.exists():
+                  continue
+              if resolved in seen_package_paths:
+                  continue
+              seen_package_paths.add(resolved)
+              existing_package_paths.append(resolved)
+
+          if existing_package_paths:
+              package_dir = existing_package_paths[0]
+              for root in existing_package_paths:
+                  search_dirs.extend(
+                      [
+                          root / "backend" / "metal" / "kernels",
+                          root / "backend" / "metal",
+                          root,
+                      ]
+                  )
+
+          ordered_dirs: list[pathlib.Path] = []
+          seen: set[pathlib.Path] = set()
+          for candidate in search_dirs:
+              if not candidate:
+                  continue
+              candidate = candidate.resolve()
+              if candidate in seen:
+                  continue
+              seen.add(candidate)
+              ordered_dirs.append(candidate)
+
+          def iter_metallibs(dirs: Iterable[pathlib.Path]):
+              for directory in dirs:
+                  if not directory.exists():
+                      continue
+                  preferred = directory / "mlx.metallib"
+                  if preferred.exists():
+                      yield preferred
+                      continue
+                  for alternative in sorted(directory.glob("*.metallib")):
+                      yield alternative
+
+          src = next(iter_metallibs(ordered_dirs), None)
+
+          package_roots = existing_package_paths if existing_package_paths else ([] if not package_dir else [package_dir])
+
+          if src is None:
+              for root in package_roots:
+                  for candidate in root.rglob("mlx.metallib"):
+                      src = candidate
+                      print(f"::warning::Resolved metallib via recursive search under {root}")
+                      break
+                  if src is not None:
+                      break
+
+          if src is None:
+              for root in package_roots:
+                  for candidate in sorted(root.rglob("*.metallib")):
+                      src = candidate
+                      print(f"::warning::Using metallib {candidate.name} discovered via package-wide search in {root}")
+                      break
+                  if src is not None:
+                      break
+
+          if src is None:
+              print("::error::Could not locate any mlx.metallib artifacts within the installed mlx package.")
+              sys.exit(1)
+
+          if src.name != "mlx.metallib":
+              print(f"::warning::Using metallib {src.name} from {src.parent}")
+
+          dest = pathlib.Path("artifacts/native/osx-arm64/mlx.metallib").resolve()
+          dest.parent.mkdir(parents=True, exist_ok=True)
+
+          shutil.copy2(src, dest)
+          print(f"Copied mlx.metallib from {src} to {dest}")
+          PY
 
       - name: Stage native libraries in project
         run: |
