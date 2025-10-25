@@ -218,9 +218,11 @@ jobs:
 
           spec = importlib.util.find_spec("mlx.backend.metal.kernels")
           if spec and spec.origin:
-              candidate = pathlib.Path(spec.origin).resolve().parent
-              if candidate.exists():
-                  kernels_dir = candidate
+              candidate_origin = spec.origin
+              if candidate_origin:
+                  candidate = pathlib.Path(candidate_origin).resolve().parent
+                  if candidate.exists():
+                      kernels_dir = candidate
 
           if kernels_dir is None:
               try:
@@ -230,11 +232,20 @@ jobs:
               if resource is not None:
                   try:
                       with resources.as_file(resource) as extracted:
-                          extracted_path = pathlib.Path(extracted)
-                          if extracted_path.exists():
-                              kernels_dir = extracted_path
+                          if extracted is not None:
+                              extracted_path = pathlib.Path(extracted)
+                              if extracted_path.exists():
+                                  kernels_dir = extracted_path
                   except FileNotFoundError:
                       pass
+
+          if kernels_dir is None:
+              package_file = getattr(mlx, "__file__", None)
+              if package_file:
+                  package_dir = pathlib.Path(package_file).resolve().parent
+                  candidate = package_dir / "backend" / "metal" / "kernels"
+                  if candidate.exists():
+                      kernels_dir = candidate
 
           if kernels_dir is None or not kernels_dir.exists():
               print("::error::Could not locate the MLX metal kernels directory; checked module spec and importlib resources.")
