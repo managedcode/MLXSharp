@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.InteropServices;
 using MLXSharp.Core;
 using Xunit;
 
@@ -76,11 +77,46 @@ internal static class NativeLibraryLocator
                 return false;
             }
 
+            if (!HasRequiredExports(path, out skipReason))
+            {
+                s_initialized = true;
+                s_available = false;
+                return false;
+            }
+
             Environment.SetEnvironmentVariable("MLXSHARP_LIBRARY", path);
             s_initialized = true;
             s_available = true;
             skipReason = null;
             return true;
+        }
+    }
+
+    private static bool HasRequiredExports(string path, out string? reason)
+    {
+        if (!NativeLibrary.TryLoad(path, out var handle))
+        {
+            reason = $"Unable to load native library from '{path}'.";
+            return false;
+        }
+
+        try
+        {
+            foreach (var export in new[] { "mlxsharp_context_create", "mlxsharp_array_from_buffer", "mlxsharp_generate_text" })
+            {
+                if (!NativeLibrary.TryGetExport(handle, export, out _))
+                {
+                    reason = $"Native library at '{path}' is missing required export '{export}'. Rebuild MLXSharp native binaries.";
+                    return false;
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+        finally
+        {
+            NativeLibrary.Free(handle);
         }
     }
 
