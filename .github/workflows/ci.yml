@@ -149,7 +149,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        run: python -m pip install huggingface_hub mlx-lm
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install huggingface_hub mlx mlx-lm
 
       - name: Download test model from HuggingFace
         run: |
@@ -192,13 +194,24 @@ except ImportError:
     print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
     sys.exit(1)
 
-src = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels" / "mlx.metallib"
+kernels_dir = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels"
+if not kernels_dir.exists():
+    print(f"::error::Could not find MLX metal kernels directory at {kernels_dir}")
+    sys.exit(1)
+
+preferred = kernels_dir / "mlx.metallib"
+if preferred.exists():
+    src = preferred
+else:
+    candidates = sorted(kernels_dir.glob("*.metallib"))
+    if not candidates:
+        print(f"::error::No metallib files were found under {kernels_dir}")
+        sys.exit(1)
+    src = candidates[0]
+    print(f"::warning::Defaulting to metallib file {src.name}")
+
 dest = pathlib.Path("artifacts/native/osx-arm64/mlx.metallib").resolve()
 dest.parent.mkdir(parents=True, exist_ok=True)
-
-if not src.exists():
-    print(f"::error::Could not find mlx.metallib at {src}")
-    sys.exit(1)
 
 shutil.copy2(src, dest)
 print(f"Copied mlx.metallib from {src} to {dest}")
