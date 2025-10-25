@@ -154,9 +154,27 @@ jobs:
           python -m pip install huggingface_hub mlx mlx-lm
 
       - name: Download test model from HuggingFace
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
           mkdir -p models
-          hf download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit --local-dir-use-symlinks False
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from huggingface_hub import snapshot_download
+
+          target_dir = Path("models/Qwen1.5-0.5B-Chat-4bit")
+          target_dir.mkdir(parents=True, exist_ok=True)
+
+          snapshot_download(
+              repo_id="mlx-community/Qwen1.5-0.5B-Chat-4bit",
+              local_dir=str(target_dir),
+              local_dir_use_symlinks=False,
+              token=os.environ.get("HF_TOKEN") or None,
+              resume_download=True,
+          )
+          PY
           echo "Model files:"
           ls -la models/Qwen1.5-0.5B-Chat-4bit/
 
