@@ -137,10 +137,21 @@ typedef struct mlx_usage {
     int output_tokens;
 } mlx_usage;
 
+typedef struct mlxsharp_session_options {
+    const char* chat_model_id;
+    const char* embedding_model_id;
+    const char* image_model_id;
+    const char* native_model_directory;
+    const char* tokenizer_path;
+    int enable_native_runner;
+    int max_generated_tokens;
+    float temperature;
+    float top_p;
+    int top_k;
+} mlxsharp_session_options;
+
 int mlxsharp_create_session(
-    const char* chat_model_id,
-    const char* embedding_model_id,
-    const char* image_model_id,
+    const mlxsharp_session_options* options,
     void** session);
 
 int mlxsharp_generate_text(
