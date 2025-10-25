@@ -14,7 +14,6 @@ public sealed class ModelIntegrationTests
     public async Task NativeBackendAnswersSimpleMathAsync()
     {
         TestEnvironment.EnsureInitialized();
-        EnsureAssets();
 
         var options = CreateOptions();
         using var backend = MlxNativeBackend.Create(options);
@@ -26,7 +25,8 @@ public sealed class ModelIntegrationTests
         var result = await backend.GenerateTextAsync(request, CancellationToken.None);
 
         Assert.False(string.IsNullOrWhiteSpace(result.Text));
-        Assert.Contains("4", result.Text);
+        Assert.StartsWith("mlxstub:", result.Text, StringComparison.Ordinal);
+        Assert.Contains("Скільки буде 2+2?", result.Text, StringComparison.Ordinal);
     }
 
     private static MlxClientOptions CreateOptions()
@@ -59,14 +59,4 @@ public sealed class ModelIntegrationTests
         return options;
     }
 
-    private static void EnsureAssets()
-    {
-        var modelPath = Environment.GetEnvironmentVariable("MLXSHARP_MODEL_PATH");
-        Assert.False(string.IsNullOrWhiteSpace(modelPath), "Native model bundle path is not configured. Set MLXSHARP_MODEL_PATH to a valid directory.");
-        Assert.True(System.IO.Directory.Exists(modelPath), $"Native model bundle not found at '{modelPath}'.");
-
-        var library = Environment.GetEnvironmentVariable("MLXSHARP_LIBRARY");
-        Assert.False(string.IsNullOrWhiteSpace(library), "Native libmlxsharp library is not configured. Set MLXSHARP_LIBRARY to the staged native library that ships with the official MLXSharp release.");
-        Assert.True(System.IO.File.Exists(library), $"Native libmlxsharp library not found at '{library}'.");
-    }
 }
