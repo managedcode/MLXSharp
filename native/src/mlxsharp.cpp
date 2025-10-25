@@ -43,11 +43,36 @@ struct mlxsharp_session {
     std::string chat_model;
     std::string embedding_model;
     std::string image_model;
-    mlxsharp_session(mlxsharp_context_t* ctx, std::string chat, std::string embed, std::string image)
+    std::string native_model_directory;
+    std::string tokenizer_path;
+    bool enable_native_runner;
+    int max_generated_tokens;
+    float temperature;
+    float top_p;
+    int top_k;
+    mlxsharp_session(
+        mlxsharp_context_t* ctx,
+        std::string chat,
+        std::string embed,
+        std::string image,
+        std::string native_dir,
+        std::string tokenizer,
+        bool enable_runner,
+        int max_tokens,
+        float temperature_value,
+        float top_p_value,
+        int top_k_value)
         : context(ctx),
           chat_model(std::move(chat)),
           embedding_model(std::move(embed)),
-          image_model(std::move(image)) {}
+          image_model(std::move(image)),
+          native_model_directory(std::move(native_dir)),
+          tokenizer_path(std::move(tokenizer)),
+          enable_native_runner(enable_runner),
+          max_generated_tokens(max_tokens),
+          temperature(temperature_value),
+          top_p(top_p_value),
+          top_k(top_k_value) {}
 };
 
 namespace {
@@ -57,6 +82,7 @@ thread_local std::string g_last_error;
 constexpr const char* kNullContext = "Context pointer is null.";
 constexpr const char* kNullArray = "Array pointer is null.";
 constexpr const char* kNullOutParameter = "Output parameter is null.";
+constexpr const char* kNullSessionOptions = "Session options pointer is null.";
 constexpr const char* kShapeMismatch = "Element count does not match provided shape.";
 constexpr const char* kNonContiguous = "Array data is not contiguous.";
 constexpr const char* kUnsupportedDType = "Unsupported dtype.";
@@ -316,8 +342,26 @@ mlxsharp_session_t* make_session_ptr(
     mlxsharp_context_t* context,
     std::string chat_model,
     std::string embedding_model,
-    std::string image_model) {
-    auto* handle = new (std::nothrow) mlxsharp_session(context, std::move(chat_model), std::move(embedding_model), std::move(image_model));
+    std::string image_model,
+    std::string native_model_directory,
+    std::string tokenizer_path,
+    bool enable_native_runner,
+    int max_generated_tokens,
+    float temperature,
+    float top_p,
+    int top_k) {
+    auto* handle = new (std::nothrow) mlxsharp_session(
+        context,
+        std::move(chat_model),
+        std::move(embedding_model),
+        std::move(image_model),
+        std::move(native_model_directory),
+        std::move(tokenizer_path),
+        enable_native_runner,
+        max_generated_tokens,
+        temperature,
+        top_p,
+        top_k);
     if (handle == nullptr) {
         throw std::bad_alloc();
     }
@@ -356,22 +400,43 @@ void ensure_contiguous(const mlx::core::array& arr) {
 extern "C" {
 
 int mlxsharp_create_session(
-    const char* chat_model_id,
-    const char* embedding_model_id,
-    const char* image_model_id,
+    const mlxsharp_session_options* options,
     void** session) {
     if (session == nullptr) {
         return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, "Session output pointer is null.");
     }
 
     return invoke([&]() -> int {
-        auto chat = chat_model_id != nullptr ? std::string(chat_model_id) : std::string{};
-        auto embed = embedding_model_id != nullptr ? std::string(embedding_model_id) : std::string{};
-        auto image = image_model_id != nullptr ? std::string(image_model_id) : std::string{};
+        if (options == nullptr) {
+            return set_error(MLXSHARP_STATUS_INVALID_ARGUMENT, kNullSessionOptions);
+        }
+
+        auto chat = options->chat_model_id != nullptr ? std::string(options->chat_model_id) : std::string{};
+        auto embed = options->embedding_model_id != nullptr ? std::string(options->embedding_model_id) : std::string{};
+        auto image = options->image_model_id != nullptr ? std::string(options->image_model_id) : std::string{};
+        auto native_dir = options->native_model_directory != nullptr ? std::string(options->native_model_directory) : std::string{};
+        auto tokenizer = options->tokenizer_path != nullptr ? std::string(options->tokenizer_path) : std::string{};
+        const bool enable_runner = options->enable_native_runner != 0;
+        const int max_tokens = options->max_generated_tokens;
+        const float temperature = options->temperature;
+        const float top_p = options->top_p;
+        const int top_k = options->top_k;
 
         auto device = mlx::core::default_device();
+        mlx::core::set_default_device(device);
         auto* context = make_context_ptr(device);
-        auto* handle = make_session_ptr(context, std::move(chat), std::move(embed), std::move(image));
+        auto* handle = make_session_ptr(
+            context,
+            std::move(chat),
+            std::move(embed),
+            std::move(image),
+            std::move(native_dir),
+            std::move(tokenizer),
+            enable_runner,
+            max_tokens,
+            temperature,
+            top_p,
+            top_k);
         *session = handle;
         return MLXSHARP_STATUS_SUCCESS;
     });

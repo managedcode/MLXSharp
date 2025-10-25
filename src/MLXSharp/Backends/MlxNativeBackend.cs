@@ -27,7 +27,8 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
         ArgumentNullException.ThrowIfNull(options);
         MlxNativeLibrary.EnsureLoaded(options.LibraryPath);
 
-        var status = MlxNativeMethods.CreateSession(options.ChatModelId, options.EmbeddingModelId, options.ImageModelId, out var session);
+        using var sessionOptions = new MarshaledSessionOptions(options);
+        var status = MlxNativeMethods.CreateSession(in sessionOptions.Value, out var session);
         if (status != 0 || session.IsInvalid)
         {
             session.Dispose();
@@ -199,6 +200,50 @@ public sealed class MlxNativeBackend : IMlxBackend, IDisposable
         existing.InputTokenCount += next.InputTokens;
         existing.OutputTokenCount += next.OutputTokens;
         return existing;
+    }
+
+    private sealed class MarshaledSessionOptions : IDisposable
+    {
+        public MlxSessionOptions Value;
+
+        public MarshaledSessionOptions(MlxClientOptions options)
+        {
+            Value = new MlxSessionOptions
+            {
+                ChatModelId = Allocate(options.ChatModelId),
+                EmbeddingModelId = Allocate(options.EmbeddingModelId),
+                ImageModelId = Allocate(options.ImageModelId),
+                NativeModelDirectory = Allocate(options.NativeModelDirectory),
+                TokenizerPath = Allocate(options.TokenizerPath),
+                EnableNativeModelRunner = options.EnableNativeModelRunner ? 1 : 0,
+                MaxGeneratedTokens = options.MaxGeneratedTokens,
+                Temperature = options.Temperature,
+                TopP = options.TopP,
+                TopK = options.TopK,
+            };
+        }
+
+        public void Dispose()
+        {
+            Free(Value.ChatModelId);
+            Free(Value.EmbeddingModelId);
+            Free(Value.ImageModelId);
+            Free(Value.NativeModelDirectory);
+            Free(Value.TokenizerPath);
+        }
+
+        private static nint Allocate(string? value)
+        {
+            return value is null ? nint.Zero : Marshal.StringToCoTaskMemUTF8(value);
+        }
+
+        private static void Free(nint pointer)
+        {
+            if (pointer != nint.Zero)
+            {
+                Marshal.FreeCoTaskMem(pointer);
+            }
+        }
     }
 
     private void ThrowIfDisposed()

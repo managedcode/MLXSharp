@@ -18,8 +18,8 @@ internal static partial class MlxNativeMethods
 {
     private const string LibraryName = "libmlxsharp";
 
-    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_create_session", StringMarshalling = StringMarshalling.Utf8)]
-    public static partial int CreateSession(string chatModelId, string embeddingModelId, string imageModelId, out SafeMlxSessionHandle session);
+    [LibraryImport(LibraryName, EntryPoint = "mlxsharp_create_session")]
+    public static partial int CreateSession(in MlxSessionOptions options, out SafeMlxSessionHandle session);
 
     [LibraryImport(LibraryName, EntryPoint = "mlxsharp_release_session")]
     public static partial void ReleaseSession(nint session);
@@ -141,4 +141,19 @@ internal struct MlxUsage
 {
     public int InputTokens;
     public int OutputTokens;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct MlxSessionOptions
+{
+    public nint ChatModelId;
+    public nint EmbeddingModelId;
+    public nint ImageModelId;
+    public nint NativeModelDirectory;
+    public nint TokenizerPath;
+    public int EnableNativeModelRunner;
+    public int MaxGeneratedTokens;
+    public float Temperature;
+    public float TopP;
+    public int TopK;
 }
