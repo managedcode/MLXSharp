@@ -184,38 +184,38 @@ jobs:
 
           echo "::warning::mlx.metallib missing from native artifact; attempting to source from installed mlx package"
           python - <<'PY'
-import pathlib
-import shutil
-import sys
+          import pathlib
+          import shutil
+          import sys
 
-try:
-    import mlx  # type: ignore
-except ImportError:
-    print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
-    sys.exit(1)
+          try:
+              import mlx  # type: ignore
+          except ImportError:
+              print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
+              sys.exit(1)
 
-kernels_dir = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels"
-if not kernels_dir.exists():
-    print(f"::error::Could not find MLX metal kernels directory at {kernels_dir}")
-    sys.exit(1)
+          kernels_dir = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels"
+          if not kernels_dir.exists():
+              print(f"::error::Could not find MLX metal kernels directory at {kernels_dir}")
+              sys.exit(1)
 
-preferred = kernels_dir / "mlx.metallib"
-if preferred.exists():
-    src = preferred
-else:
-    candidates = sorted(kernels_dir.glob("*.metallib"))
-    if not candidates:
-        print(f"::error::No metallib files were found under {kernels_dir}")
-        sys.exit(1)
-    src = candidates[0]
-    print(f"::warning::Defaulting to metallib file {src.name}")
+          preferred = kernels_dir / "mlx.metallib"
+          if preferred.exists():
+              src = preferred
+          else:
+              candidates = sorted(kernels_dir.glob("*.metallib"))
+              if not candidates:
+                  print(f"::error::No metallib files were found under {kernels_dir}")
+                  sys.exit(1)
+              src = candidates[0]
+              print(f"::warning::Defaulting to metallib file {src.name}")
 
-dest = pathlib.Path("artifacts/native/osx-arm64/mlx.metallib").resolve()
-dest.parent.mkdir(parents=True, exist_ok=True)
+          dest = pathlib.Path("artifacts/native/osx-arm64/mlx.metallib").resolve()
+          dest.parent.mkdir(parents=True, exist_ok=True)
 
-shutil.copy2(src, dest)
-print(f"Copied mlx.metallib from {src} to {dest}")
-PY
+          shutil.copy2(src, dest)
+          print(f"Copied mlx.metallib from {src} to {dest}")
+          PY
 
       - name: Stage native libraries in project
         run: |
