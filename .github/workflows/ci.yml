@@ -25,71 +25,103 @@ jobs:
       - name: Build managed projects
         run: dotnet build --configuration Release --no-restore
 
-  native-linux:
+  native-assets:
     needs: dotnet-build
     runs-on: ubuntu-latest
+    env:
+      NATIVE_RELEASE_REPO: ${{ vars.MLXSHARP_NATIVE_REPO || 'ManagedCode/MLXSharp' }}
+      NATIVE_RELEASE_TAG: ${{ vars.MLXSHARP_NATIVE_TAG || '' }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: Install build dependencies
+      - name: Install tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake libopenblas-dev liblapack-dev liblapacke-dev
+          sudo apt-get install -y jq unzip
 
-      - name: Configure native build
-        run: cmake -S native -B native/build/linux -DCMAKE_BUILD_TYPE=Release
-
-      - name: Build native library
-        run: cmake --build native/build/linux --target mlxsharp --config Release
-
-      - name: Package native artifact
+      - name: Download official native binaries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p artifacts/native/linux-x64
-          cp native/build/linux/libmlxsharp.so artifacts/native/linux-x64/
+          set -euo pipefail
 
-      - name: Upload native artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: native-linux-x64
-          path: artifacts/native/linux-x64/libmlxsharp.so
+          repo="${NATIVE_RELEASE_REPO}"
+          if [ -z "$repo" ]; then
+            echo "::error::NATIVE_RELEASE_REPO must be provided" >&2
+            exit 1
+          fi
 
-  native-macos:
-    needs: dotnet-build
-    runs-on: macos-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          submodules: recursive
+          if [ -n "${NATIVE_RELEASE_TAG}" ]; then
+            release_api="https://api.github.com/repos/${repo}/releases/tags/${NATIVE_RELEASE_TAG}"
+          else
+            release_api="https://api.github.com/repos/${repo}/releases/latest"
+          fi
 
-      - name: Install CMake
-        run: brew install cmake
+          echo "Fetching release metadata from ${release_api}"
+          response=$(curl -fsSL -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$release_api")
+          tag=$(echo "$response" | jq -r '.tag_name // ""')
 
-      - name: Configure native build
-        run: cmake -S native -B native/build/macos -DCMAKE_BUILD_TYPE=Release
+          if [ -z "$tag" ]; then
+            echo "::error::Unable to resolve release tag from ${release_api}" >&2
+            exit 1
+          fi
 
-      - name: Build native library
-        run: cmake --build native/build/macos --target mlxsharp --config Release
+          echo "Using native release ${repo}@${tag}"
 
-      - name: Package native artifact
-        run: |
-          mkdir -p artifacts/native/osx-arm64
-          cp native/build/macos/libmlxsharp.dylib artifacts/native/osx-arm64/
-          cp native/build/macos/extern/mlx/mlx/backend/metal/kernels/mlx.metallib artifacts/native/osx-arm64/
+          nupkg_asset=$(echo "$response" | jq -r '.assets[] | select(.name | startswith("ManagedCode.MLXSharp.")) | select(.name | endswith(".nupkg")) | .name' | head -n1)
+          if [ -z "$nupkg_asset" ] || [ "$nupkg_asset" = "null" ]; then
+            echo "::error::No ManagedCode.MLXSharp.*.nupkg asset found in release ${tag}" >&2
+            exit 1
+          fi
 
-      - name: Upload native artifact
+          asset_url=$(echo "$response" | jq -r --arg name "$nupkg_asset" '.assets[] | select(.name == $name) | .url')
+          if [ -z "$asset_url" ] || [ "$asset_url" = "null" ]; then
+            echo "::error::Failed to resolve download URL for ${nupkg_asset}" >&2
+            exit 1
+          fi
+
+          mkdir -p work artifacts/native/osx-arm64 artifacts/native/linux-x64
+
+          echo "Downloading ${nupkg_asset}"
+          curl -fsSL -H "Accept: application/octet-stream" -H "Authorization: Bearer ${GITHUB_TOKEN}" "$asset_url" -o work/native.nupkg
+
+          echo "Extracting native runtimes"
+          unzip -q work/native.nupkg 'runtimes/osx-arm64/native/*' -d work/extract
+          unzip -q work/native.nupkg 'runtimes/linux-x64/native/*' -d work/extract
+
+          shopt -s nullglob
+          mac_files=(work/extract/runtimes/osx-arm64/native/*)
+          linux_files=(work/extract/runtimes/linux-x64/native/*)
+
+          if [ ${#mac_files[@]} -eq 0 ]; then
+            echo "::error::macOS native assets are missing from ${nupkg_asset}" >&2
+            exit 1
+          fi
+
+          if [ ${#linux_files[@]} -eq 0 ]; then
+            echo "::error::Linux native assets are missing from ${nupkg_asset}" >&2
+            exit 1
+          fi
+
+          cp work/extract/runtimes/osx-arm64/native/* artifacts/native/osx-arm64/
+          cp work/extract/runtimes/linux-x64/native/* artifacts/native/linux-x64/
+
+          echo "Staged native artifacts:"
+          ls -R artifacts/native
+
+      - name: Upload macOS native artifact
         uses: actions/upload-artifact@v4
         with:
           name: native-osx-arm64
           path: artifacts/native/osx-arm64
 
+      - name: Upload Linux native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-x64
+          path: artifacts/native/linux-x64
+
   package-test:
     needs:
-      - native-linux
-      - native-macos
+      - native-assets
     runs-on: macos-latest
     steps:
       - name: Checkout repository
