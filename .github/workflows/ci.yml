@@ -154,7 +154,7 @@ jobs:
       - name: Download test model from HuggingFace
         run: |
           mkdir -p models
-          huggingface-cli download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit
+          hf download mlx-community/Qwen1.5-0.5B-Chat-4bit --local-dir models/Qwen1.5-0.5B-Chat-4bit --local-dir-use-symlinks False
           echo "Model files:"
           ls -la models/Qwen1.5-0.5B-Chat-4bit/
 
@@ -169,6 +169,40 @@ jobs:
         with:
           name: native-linux-x64
           path: artifacts/native/linux-x64
+
+      - name: Ensure macOS metallib is available
+        run: |
+          set -euo pipefail
+
+          metallib_path="artifacts/native/osx-arm64/mlx.metallib"
+          if [ -f "${metallib_path}" ]; then
+            echo "Found mlx.metallib in downloaded native artifact."
+            exit 0
+          fi
+
+          echo "::warning::mlx.metallib missing from native artifact; attempting to source from installed mlx package"
+          python - <<'PY'
+import pathlib
+import shutil
+import sys
+
+try:
+    import mlx  # type: ignore
+except ImportError:
+    print("::error::The 'mlx' Python package is not installed; cannot locate mlx.metallib.")
+    sys.exit(1)
+
+src = pathlib.Path(mlx.__file__).resolve().parent / "backend" / "metal" / "kernels" / "mlx.metallib"
+dest = pathlib.Path("artifacts/native/osx-arm64/mlx.metallib").resolve()
+dest.parent.mkdir(parents=True, exist_ok=True)
+
+if not src.exists():
+    print(f"::error::Could not find mlx.metallib at {src}")
+    sys.exit(1)
+
+shutil.copy2(src, dest)
+print(f"Copied mlx.metallib from {src} to {dest}")
+PY
 
       - name: Stage native libraries in project
         run: |
