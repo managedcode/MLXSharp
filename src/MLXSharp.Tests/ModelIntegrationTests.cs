@@ -66,7 +66,7 @@ public sealed class ModelIntegrationTests
         Assert.True(System.IO.Directory.Exists(modelPath), $"Native model bundle not found at '{modelPath}'.");
 
         var library = Environment.GetEnvironmentVariable("MLXSHARP_LIBRARY");
-        Assert.False(string.IsNullOrWhiteSpace(library), "Native libmlxsharp library is not configured. Set MLXSHARP_LIBRARY to the compiled native library.");
+        Assert.False(string.IsNullOrWhiteSpace(library), "Native libmlxsharp library is not configured. Set MLXSHARP_LIBRARY to the compiled native library or rely on the official ManagedCode.MLXSharp package that the test harness can download automatically.");
         Assert.True(System.IO.File.Exists(library), $"Native libmlxsharp library not found at '{library}'.");
     }
 }

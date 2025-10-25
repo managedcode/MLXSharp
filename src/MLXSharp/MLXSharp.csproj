@@ -16,6 +16,9 @@
   </ItemGroup>
 
   <PropertyGroup>
+    <_RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/../..'))</_RepoRoot>
+    <MLXSharpNativeLibsDir Condition="'$(MLXSharpNativeLibsDir)' == ''">$([System.IO.Path]::Combine('$(_RepoRoot)','libs','native-libs'))</MLXSharpNativeLibsDir>
+    <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == '' and Exists('$([System.IO.Path]::Combine('$(MLXSharpNativeLibsDir)','osx-arm64','libmlxsharp.dylib'))')">$([System.IO.Path]::Combine('$(MLXSharpNativeLibsDir)','osx-arm64','libmlxsharp.dylib'))</MLXSharpMacNativeBinary>
     <MLXSharpMacNativeBinary Condition="'$(MLXSharpMacNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','libmlxsharp.dylib'))</MLXSharpMacNativeBinary>
     <MLXSharpMacNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','osx-arm64','native','libmlxsharp.dylib'))</MLXSharpMacNativeDestination>
     <MLXSharpSkipMacNativeValidation Condition="'$(MLXSharpSkipMacNativeValidation)' == ''">false</MLXSharpSkipMacNativeValidation>
@@ -23,6 +26,7 @@
     <MLXSharpMacMetallibBinary Condition="'$(MLXSharpMacMetallibBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','macos','extern','mlx','mlx','backend','metal','kernels','mlx.metallib'))</MLXSharpMacMetallibBinary>
     <MLXSharpMacMetallibDestination Condition="'$(MLXSharpMacMetallibDestination)' == ''">$([System.IO.Path]::Combine('$(MLXSharpMacNativeDestinationDir)','mlx.metallib'))</MLXSharpMacMetallibDestination>
 
+    <MLXSharpLinuxNativeBinary Condition="'$(MLXSharpLinuxNativeBinary)' == '' and Exists('$([System.IO.Path]::Combine('$(MLXSharpNativeLibsDir)','linux-x64','libmlxsharp.so'))')">$([System.IO.Path]::Combine('$(MLXSharpNativeLibsDir)','linux-x64','libmlxsharp.so'))</MLXSharpLinuxNativeBinary>
     <MLXSharpLinuxNativeBinary Condition="'$(MLXSharpLinuxNativeBinary)' == ''">$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','..','..','native','build','linux','libmlxsharp.so'))</MLXSharpLinuxNativeBinary>
     <MLXSharpLinuxNativeDestination>$([System.IO.Path]::Combine('$(MSBuildProjectDirectory)','runtimes','linux-x64','native','libmlxsharp.so'))</MLXSharpLinuxNativeDestination>
     <MLXSharpSkipLinuxNativeValidation Condition="'$(MLXSharpSkipLinuxNativeValidation)' == ''">false</MLXSharpSkipLinuxNativeValidation>

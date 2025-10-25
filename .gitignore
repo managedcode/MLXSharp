@@ -873,3 +873,7 @@ FodyWeavers.xsd
 # Local model files for testing
 Tests/**/LocalModels/
 Apps/**/LocalModels/
+# Downloaded native artifacts
+libs/native-libs/
+ManagedCode.MLXSharp.nupkg
+

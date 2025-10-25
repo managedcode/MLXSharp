@@ -117,7 +117,7 @@ dotnet test
 
 `MLXSHARP_HF_MODEL_ID` is picked up by the Python smoke test; omit it to fall back to `mlx-community/Qwen1.5-0.5B-Chat-4bit`.
 
-When running locally you can place prebuilt binaries under `libs/native-osx-arm64` (and/or `libs/native-libs`) and a corresponding model bundle under `model/`. The test harness auto-discovers these folders and configures `MLXSHARP_LIBRARY`, `MLXSHARP_MODEL_PATH`, and `MLXSHARP_TOKENIZER_PATH` so you can iterate completely offline.
+When running locally you can place prebuilt binaries under `libs/native-osx-arm64` (and/or `libs/native-libs`) and a corresponding model bundle under `model/`. The test harness auto-discovers these folders and configures `MLXSHARP_LIBRARY`, `MLXSHARP_MODEL_PATH`, and `MLXSHARP_TOKENIZER_PATH` so you can iterate completely offline. If no native binary is present the tests now download the latest signed `ManagedCode.MLXSharp` NuGet package and stage its `runtimes/{rid}/native/libmlxsharp.{dylib|so}` assets under `libs/native-libs/` automatically.
 
 The integration suite invokes `python -m mlx_lm.generate` with deterministic settings (temperature `0`, seed `42`) and asserts that the generated response for prompts like “Скільки буде 2+2?” contains the correct answer. Test output includes the raw generation transcript so you can verify the model behaviour directly from the CI logs.
 
